@@ -3031,7 +3031,20 @@ exit 0
 ##    and Warzone stop at "Networking failed to start" (HUENEME - NEGEV);
 ##    resolved directly they come up (reported from a PS5 in Tehran, 0.8.5).
 ##
-##      demonware.net          lsg, genesis.stun, loginservice, user-consent
+##      demonware.net          lsg, genesis.stun, loginservice
+##
+##    Four Demonware names are the exception, and are routed on purpose
+##    (domains.txt, the Call of Duty "cod-https" group): they are plain HTTPS
+##    on 443 - consent, the title's object stores and the version check - and
+##    since October 2026 they answer an Iranian address with 403, so the game
+##    stops at "Checking for update" (HILLCAT). Routed, a longer match than
+##    demonware.net, they win over the line below; the lobby and STUN stay
+##    direct. Measured on a PS5 in Tehran, 0.10.7, exit in Ireland:
+##
+##      user-consent.prod.demonware.net
+##      objectstore-publishers-cod.prod.demonware.net
+##      objectstore-cloud-prod-rex.egcp.demonware.net
+##      rex-gvs.prod.demonware.net
 ##
 ## 2. The service is reachable from Iran anyway, and routing it costs something.
 ##    ps5.np.playstation.net is the console's STUN server as well as a PSN API
@@ -37093,6 +37106,8 @@ exit 0
 #nvidiagrid.net
 #oaistatic.com
 #oaiusercontent.com
+#objectstore-cloud-prod-rex.egcp.demonware.net
+#objectstore-publishers-cod.prod.demonware.net
 #offworldindustries.com
 #ollama.com
 #oncehuman.game
@@ -37179,6 +37194,7 @@ exit 0
 #replit.com
 #researchgate.net
 #respawn.com
+#rex-gvs.prod.demonware.net
 #rgpub.io
 #riotcdn.net
 #riotgames.co.kr
@@ -37321,6 +37337,7 @@ exit 0
 #unsplash.com
 #uplay.com
 #upwork.com
+#user-consent.prod.demonware.net
 #vagrantup.com
 #valorant.com
 #valorantesports.com
@@ -37618,6 +37635,17 @@ exit 0
 #            "sledgehammergames.com",
 #            "treyarch.com",
 #            "worldofwarcraft.com"
+#          ]
+#        },
+#        {
+#          "key": "cod-https",
+#          "label": "Call of Duty — دانلود و مجوز",
+#          "note": "فقط این چهار نام از Demonware روی ۴۴۳ هستند و از ایران ۴۰۳ می‌گیرند؛ بقیهٔ Demonware (لابی و STUN) مستقیم می‌ماند",
+#          "domains": [
+#            "objectstore-cloud-prod-rex.egcp.demonware.net",
+#            "objectstore-publishers-cod.prod.demonware.net",
+#            "rex-gvs.prod.demonware.net",
+#            "user-consent.prod.demonware.net"
 #          ]
 #        },
 #        {
@@ -39720,6 +39748,7 @@ exit 0
 #      "kind": "game",
 #      "needs": [
 #        "blizzard/main",
+#        "blizzard/cod-https",
 #        "blizzard/download"
 #      ]
 #    },
@@ -41340,6 +41369,7 @@ exit 0
 #"BackPack روی این رله نصب نیست؛ نصب‌کننده را یک بار دیگر روی رله اجرا کنید": "BackPack is not installed on this relay; run the installer on the relay once more",
 #"BackPack یا سرویس تونل روی این رله نیست؛ نصب‌کننده را یک بار دیگر اجرا کنید": "BackPack or the tunnel service is not on this relay; run the installer once more",
 #"BackPack یا سرویس تونل روی این سرور نصب نیست؛ نصب‌کنندهٔ نسخهٔ تازه را یک بار دیگر روی همین سرور اجرا کنید": "BackPack or the tunnel service is not installed on this server; run the new version’s installer on this server once more",
+#"Call of Duty — دانلود و مجوز": "Call of Duty — downloads and consent",
 #"Cloudflare — بدون بدافزار": "Cloudflare — no malware",
 #"Cloudflare — خانواده": "Cloudflare — family",
 #"DNS امن (DoH و DoT)": "Secure DNS (DoH and DoT)",
@@ -42770,6 +42800,7 @@ exit 0
 #"فقط از این آدرس‌ها (اختیاری، با ویرگول جدا)": "Only from these addresses (optional, separated by commas)",
 #"فقط از قالب‌های تیک‌خورده": "Only the ticked templates",
 #"فقط اولین خرید": "First purchase only",
+#"فقط این چهار نام از Demonware روی ۴۴۳ هستند و از ایران ۴۰۳ می‌گیرند؛ بقیهٔ Demonware (لابی و STUN) مستقیم می‌ماند": "Only these four Demonware names are on 443 and get 403 from Iran; the rest of Demonware (lobby and STUN) stays direct",
 #"فقط این‌ها:": "Only these:",
 #"فقط برای این پلن‌ها (هیچ‌کدام = همه):": "Only for these plans (none = all):",
 #"فقط تعداد؛ اینکه چه اسمی پرسیده شد جایی نگه داشته نمی‌شود. روز به وقت تهران.": "Counts only; which names were asked is not kept anywhere. Days in Tehran time.",

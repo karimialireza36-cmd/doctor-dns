@@ -239,6 +239,17 @@
           ]
         },
         {
+          "key": "cod-https",
+          "label": "Call of Duty — دانلود و مجوز",
+          "note": "فقط این چهار نام از Demonware روی ۴۴۳ هستند و از ایران ۴۰۳ می‌گیرند؛ بقیهٔ Demonware (لابی و STUN) مستقیم می‌ماند",
+          "domains": [
+            "objectstore-cloud-prod-rex.egcp.demonware.net",
+            "objectstore-publishers-cod.prod.demonware.net",
+            "rex-gvs.prod.demonware.net",
+            "user-consent.prod.demonware.net"
+          ]
+        },
+        {
           "key": "download",
           "label": "دانلود بازی",
           "domains": [

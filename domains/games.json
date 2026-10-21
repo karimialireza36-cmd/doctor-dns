@@ -252,6 +252,7 @@
       "kind": "game",
       "needs": [
         "blizzard/main",
+        "blizzard/cod-https",
         "blizzard/download"
       ]
     },
