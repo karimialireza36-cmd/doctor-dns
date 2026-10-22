@@ -186,6 +186,17 @@ relay_allows() {
     chmod 644 "$RELAYS_CONF"
 }
 
+# The names of sites the relay serves itself (see relay-nginx.conf). Created
+# empty so nginx -t passes, and never written again: the operator's list
+# survives every upgrade, and is left in place on uninstall.
+LOCAL_SITES_MAP=/etc/nginx/smartdns-local-sites.map
+local_sites_include() {
+    [ -e "$LOCAL_SITES_MAP" ] && return 0
+    printf '# Sites this relay serves itself, one "name 127.0.0.1:7443;" a line. Empty: none.\n' \
+        > "$LOCAL_SITES_MAP"
+    chmod 644 "$LOCAL_SITES_MAP"
+}
+
 # What nginx's DoH blocks include: the certificate, and the names that reach
 # the DoH server. Written here with the machine's own name; once the admin
 # panel has given DoH a name of its own and smartdns-sync has a certificate
@@ -194,6 +205,9 @@ relay_allows() {
 DOH_CERT_CONF=/etc/nginx/smartdns-doh-cert.conf
 DOH_NAMES_MAP=/etc/nginx/smartdns-doh-names.map
 doh_includes() {
+    # The sites file lives in the same DoH blocks; it is the operator's, so
+    # it comes before the check below that leaves the others to smartdns-sync.
+    local_sites_include
     if [ -s /etc/smart-dns/doh-name ] && [ -s "$DOH_CERT_CONF" ] && [ -s "$DOH_NAMES_MAP" ]; then
         return 0
     fi
