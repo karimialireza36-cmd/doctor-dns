@@ -3999,15 +3999,32 @@ def typed_ip(text):
     return str(addr), ""
 
 
+def signup_open():
+    """Whether this panel lets people open an account themselves.
+
+    WEB_SIGNUP=off in sync.env closes it, for an operator whose customers get
+    their accounts from the operator's own sales bot through the API and are
+    never meant to see this panel's sign-up at all. Existing accounts still
+    sign in, and the page that registers an address is untouched. On by
+    default, so nothing changes for anybody who does not ask.
+    """
+    return ((CFG or {}).get("WEB_SIGNUP") or "on").strip().lower() not in ("off", "0", "no")
+
+
+SIGNUP_CLOSED = ("ثبت‌نام از این صفحه بسته است. حساب را از ربات فروشنده بگیرید؛ "
+                 "اگر حساب دارید، وارد شوید.")
+
+
 def landing(banner=""):
     return (banner +
             "<div class='icon'>🌐</div><h1>%s</h1>"
             "<p class='sub'>برای دیدن حساب و ثبت آی‌پی وارد شوید.</p>"
             "<a class='btn' href='/login'>ورود</a>"
-            "<a class='btn ghost' href='/signup'>ثبت‌نام</a>"
+            "%s"
             "<p class='note'>از همان اینترنتی وارد شوید که می‌خواهید سرویس "
             "روی آن کار کند — آی‌پی همان اتصال ثبت می‌شود.</p>"
-            % html.escape(brand()))
+            % (html.escape(brand()),
+               "<a class='btn ghost' href='/signup'>ثبت‌نام</a>" if signup_open() else ""))
 
 
 REF_RE = re.compile(r"[A-Za-z0-9]{6,16}")
@@ -4056,8 +4073,10 @@ def login_form(banner=""):
             "<input name='password' type='password' required "
             "autocomplete='current-password'>"
             "<button>ورود</button></form>%s"
-            "<p class='alt'>حساب ندارید؟ <a href='/signup'>ثبت‌نام کنید</a></p>"
-            % (html.escape(brand()), forgot_line()))
+            "%s"
+            % (html.escape(brand()), forgot_line(),
+               "<p class='alt'>حساب ندارید؟ <a href='/signup'>ثبت‌نام کنید</a></p>"
+               if signup_open() else ""))
 
 
 def forgot_line():
@@ -5682,6 +5701,8 @@ class UserPanel(http.server.BaseHTTPRequestHandler):
         if path == "/vazirmatn.woff2":
             return self.send_font()
 
+        if path == "/signup" and not signup_open():
+            return self.redirect("/login", SIGNUP_CLOSED, bad=True)
         if path in ("/signup", "/login"):
             # Whether a cookie is here decides only whether to offer a way back
             # to the account, never whether to show the form. Bouncing on the
@@ -5791,6 +5812,8 @@ class UserPanel(http.server.BaseHTTPRequestHandler):
         if self.sent_elsewhere(path):
             return
 
+        if path == "/signup" and not signup_open():
+            return self.redirect("/login", SIGNUP_CLOSED, bad=True)
         if path in ("/signup", "/login"):
             form = self.form()
             endpoint = "/user-signup" if path == "/signup" else "/user-password-login"

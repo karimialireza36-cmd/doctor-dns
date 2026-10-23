@@ -2630,6 +2630,12 @@ EOF
     set_env_key /etc/smart-dns/sync.env TUNNEL_DIRECTION "${TUNNEL_DIRECTION:-}"
     set_env_key /etc/smart-dns/sync.env TUNNEL_PORT "${TUNNEL_PORT:-}"
     set_env_key /etc/smart-dns/sync.env TUNNEL_PRESET "${TUNNEL_PRESET:-}"
+    # WEB_SIGNUP=off closes the customer panel's own sign-up (accounts come
+    # from the operator's sales bot instead). Only written when given, so a
+    # re-run without it keeps whatever is there.
+    if [ -n "${WEB_SIGNUP:-}" ]; then
+        set_env_key /etc/smart-dns/sync.env WEB_SIGNUP "$WEB_SIGNUP"
+    fi
     umask 022
     chmod 600 /etc/smart-dns/sync.env
 

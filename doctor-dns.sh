@@ -2630,6 +2630,12 @@ EOF
     set_env_key /etc/smart-dns/sync.env TUNNEL_DIRECTION "${TUNNEL_DIRECTION:-}"
     set_env_key /etc/smart-dns/sync.env TUNNEL_PORT "${TUNNEL_PORT:-}"
     set_env_key /etc/smart-dns/sync.env TUNNEL_PRESET "${TUNNEL_PRESET:-}"
+    # WEB_SIGNUP=off closes the customer panel's own sign-up (accounts come
+    # from the operator's sales bot instead). Only written when given, so a
+    # re-run without it keeps whatever is there.
+    if [ -n "${WEB_SIGNUP:-}" ]; then
+        set_env_key /etc/smart-dns/sync.env WEB_SIGNUP "$WEB_SIGNUP"
+    fi
     umask 022
     chmod 600 /etc/smart-dns/sync.env
 
@@ -16889,15 +16895,32 @@ exit 0
 #    return str(addr), ""
 #
 #
+#def signup_open():
+#    """Whether this panel lets people open an account themselves.
+#
+#    WEB_SIGNUP=off in sync.env closes it, for an operator whose customers get
+#    their accounts from the operator's own sales bot through the API and are
+#    never meant to see this panel's sign-up at all. Existing accounts still
+#    sign in, and the page that registers an address is untouched. On by
+#    default, so nothing changes for anybody who does not ask.
+#    """
+#    return ((CFG or {}).get("WEB_SIGNUP") or "on").strip().lower() not in ("off", "0", "no")
+#
+#
+#SIGNUP_CLOSED = ("ثبت‌نام از این صفحه بسته است. حساب را از ربات فروشنده بگیرید؛ "
+#                 "اگر حساب دارید، وارد شوید.")
+#
+#
 #def landing(banner=""):
 #    return (banner +
 #            "<div class='icon'>🌐</div><h1>%s</h1>"
 #            "<p class='sub'>برای دیدن حساب و ثبت آی‌پی وارد شوید.</p>"
 #            "<a class='btn' href='/login'>ورود</a>"
-#            "<a class='btn ghost' href='/signup'>ثبت‌نام</a>"
+#            "%s"
 #            "<p class='note'>از همان اینترنتی وارد شوید که می‌خواهید سرویس "
 #            "روی آن کار کند — آی‌پی همان اتصال ثبت می‌شود.</p>"
-#            % html.escape(brand()))
+#            % (html.escape(brand()),
+#               "<a class='btn ghost' href='/signup'>ثبت‌نام</a>" if signup_open() else ""))
 #
 #
 #REF_RE = re.compile(r"[A-Za-z0-9]{6,16}")
@@ -16946,8 +16969,10 @@ exit 0
 #            "<input name='password' type='password' required "
 #            "autocomplete='current-password'>"
 #            "<button>ورود</button></form>%s"
-#            "<p class='alt'>حساب ندارید؟ <a href='/signup'>ثبت‌نام کنید</a></p>"
-#            % (html.escape(brand()), forgot_line()))
+#            "%s"
+#            % (html.escape(brand()), forgot_line(),
+#               "<p class='alt'>حساب ندارید؟ <a href='/signup'>ثبت‌نام کنید</a></p>"
+#               if signup_open() else ""))
 #
 #
 #def forgot_line():
@@ -18572,6 +18597,8 @@ exit 0
 #        if path == "/vazirmatn.woff2":
 #            return self.send_font()
 #
+#        if path == "/signup" and not signup_open():
+#            return self.redirect("/login", SIGNUP_CLOSED, bad=True)
 #        if path in ("/signup", "/login"):
 #            # Whether a cookie is here decides only whether to offer a way back
 #            # to the account, never whether to show the form. Bouncing on the
@@ -18681,6 +18708,8 @@ exit 0
 #        if self.sent_elsewhere(path):
 #            return
 #
+#        if path == "/signup" and not signup_open():
+#            return self.redirect("/login", SIGNUP_CLOSED, bad=True)
 #        if path in ("/signup", "/login"):
 #            form = self.form()
 #            endpoint = "/user-signup" if path == "/signup" else "/user-password-login"
@@ -41457,6 +41486,7 @@ exit 0
 #"Pangle (تبلیغات تیک‌تاک)": "Pangle (TikTok’s ads)",
 #"PlayStation — STUN و API": "PlayStation — STUN and API",
 #"PlayStation — آپدیت سیستم": "PlayStation — system updates",
+#"ثبت‌نام از این صفحه بسته است. حساب را از ربات فروشنده بگیرید؛ اگر حساب دارید، وارد شوید.": "Sign-up is closed on this page. Get your account from the seller’s bot; if you have one, sign in.",
 #"PowerShell را با Run as administrator باز کنید و این را بزنید:": "Open PowerShell with Run as administrator and enter this:",
 #"RedTube، YouPorn و Tube8": "RedTube, YouPorn and Tube8",
 #"SVG اسکریپت یا چیز فعال دارد؛ یک SVG ساده بدهید": "the SVG has a script or something active in it; give a plain SVG",
