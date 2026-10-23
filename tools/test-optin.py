@@ -63,7 +63,7 @@ check("Epic itself is the store and its downloads, not the game backend",
 byp = next(s for s in cat if s["key"] == "bypass")
 groups = {g["key"]: g for g in byp["groups"]}
 check("the bypass category has a group per thing kept out of the hijack",
-      set(groups) == {"ea", "demonware", "playstation", "epic", "azure", "voice", "steam"},
+      set(groups) == {"ea", "demonware", "playstation", "playstation-update", "epic", "azure", "voice", "steam"},
       str(set(groups)))
 check("every one of them is opt-in",
       all(g.get("opt_in") is True for g in byp["groups"]))

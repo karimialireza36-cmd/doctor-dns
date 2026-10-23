@@ -2002,6 +2002,15 @@
           ]
         },
         {
+          "key": "playstation-update",
+          "label": "PlayStation — آپدیت سیستم",
+          "opt_in": true,
+          "note": "از ایران مستقیم باز است؛ روشن کردنش هر آپدیت سیستم کنسول (حدود ۱٫۲ گیگ) را از رله می‌فرستد و از حجم مشتری کم می‌کند",
+          "domains": [
+            "update.playstation.net"
+          ]
+        },
+        {
           "key": "epic",
           "label": "Epic Games — بک‌اند بازی",
           "opt_in": true,

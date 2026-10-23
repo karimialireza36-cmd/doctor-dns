@@ -3102,6 +3102,17 @@ exit 0
 ##    when reached directly from the relay, so direct beats routed here.
 ##
 ## Add more with:  smartdns bypass <domain>
+##
+## 3. Console system updates. They are big (a PS5 update is about 1.2-1.3 GB,
+##    MewX/ps5-official-firmware-list) and Sony's update CDN answers an Iranian
+##    address directly (fus01.ps5.update.playstation.net updatelist.xml: 200 in
+##    0.19 s from an Iranian datacenter, October 2026). Routed under the
+##    playstation.net line, every console update went through the relay and the
+##    exit: it ate a plan's volume and cost the operator traffic for nothing.
+##    All PS4/PS5 update hosts live under update.playstation.net (fjp01/fus01
+##    for the list, pc/djp01/dus01/deu01 for the PUP; psdevwiki System_Software).
+##
+##      update.playstation.net  <x>.ps5.update / <x>.ps4.update - system software
 #
 #server=/gosredirector.ea.com/#
 #server=/blazeredirector.ea.com/#
@@ -3111,6 +3122,7 @@ exit 0
 #server=/demonware.net/#
 #server=/np.playstation.net/#
 #server=/np.dl.playstation.net/#
+#server=/update.playstation.net/#
 #server=/ol.epicgames.com/#
 #server=/ogs.live.on.epicgames.com/#
 #server=/edea.live.use1a.on.epicgames.com/#
@@ -39427,6 +39439,15 @@ exit 0
 #          ]
 #        },
 #        {
+#          "key": "playstation-update",
+#          "label": "PlayStation — آپدیت سیستم",
+#          "opt_in": true,
+#          "note": "از ایران مستقیم باز است؛ روشن کردنش هر آپدیت سیستم کنسول (حدود ۱٫۲ گیگ) را از رله می‌فرستد و از حجم مشتری کم می‌کند",
+#          "domains": [
+#            "update.playstation.net"
+#          ]
+#        },
+#        {
 #          "key": "epic",
 #          "label": "Epic Games — بک‌اند بازی",
 #          "opt_in": true,
@@ -41435,6 +41456,7 @@ exit 0
 #"PNG بیشتر از ۶۴ کیلوبایت است": "the PNG is over 64 KB",
 #"Pangle (تبلیغات تیک‌تاک)": "Pangle (TikTok’s ads)",
 #"PlayStation — STUN و API": "PlayStation — STUN and API",
+#"PlayStation — آپدیت سیستم": "PlayStation — system updates",
 #"PowerShell را با Run as administrator باز کنید و این را بزنید:": "Open PowerShell with Run as administrator and enter this:",
 #"RedTube، YouPorn و Tube8": "RedTube, YouPorn and Tube8",
 #"SVG اسکریپت یا چیز فعال دارد؛ یک SVG ساده بدهید": "the SVG has a script or something active in it; give a plain SVG",
@@ -42581,6 +42603,7 @@ exit 0
 #"روشن کردنش این اتصال‌ها را قطع می‌کند — SNI در مسیر مخدوش می‌شود": "turning it on cuts these connections — SNI gets garbled on the way",
 #"روشن کردنش بازی‌های EA را از سرور جدا می‌کند — این‌ها روی ۴۴۳ نیستند": "turning it on cuts EA games off from their servers — these are not on 443",
 #"روشن کردنش تشخیص NAT کنسول را خراب می‌کند": "turning it on breaks the console’s NAT detection",
+#"از ایران مستقیم باز است؛ روشن کردنش هر آپدیت سیستم کنسول (حدود ۱٫۲ گیگ) را از رله می‌فرستد و از حجم مشتری کم می‌کند": "reachable directly from Iran; turning it on sends every console system update (about 1.2 GB) through the relay and out of the customer’s volume",
 #"روشن کردنش صدا را قطع می‌کند — این‌ها روی UDP کار می‌کنند و رله فقط ۸۰ و ۴۴۳ را می‌برد. اسم discord.media همان چیزی است که کلاینت با آن فاصلهٔ هر منطقهٔ صوتی را می‌سنجد؛ رد کردنش باعث می‌شود همیشه منطقهٔ اشتباه انتخاب شود": "turning it on cuts voice — these work over UDP and the relay only carries 80 and 443. discord.media is the name the client measures each voice region’s distance with; routing it makes it always pick the wrong region",
 #"روشن کردنش ورود استیم را کند می‌کند — کلاینت روی پورت‌های ۲۷۰۱۸ تا ۲۷۰۲۴ به این اسم وصل می‌شود و رله فقط ۸۰ و ۴۴۳ را می‌برد، پس منتظر می‌ماند و بعد به لیست آی‌پی‌ها برمی‌گردد. فروشگاه و انجمن استیم همچنان از سرور رد می‌شوند": "turning it on slows down Steam sign-in — the client connects to this name on ports 27018 to 27024 and the relay only carries 80 and 443, so it waits and then falls back to the IP list. The Steam store and community still go through the server",
 #"روشن کردنش چت و دوستان لیگ و والورانت را قطع می‌کند — این‌ها روی ۵۲۲۲ و ۵۲۲۳ و ۲۰۹۹ هستند و رله فقط ۸۰ و ۴۴۳ را می‌برد. اگر روزی این پورت‌ها روی رله باز شوند، این گروه می‌تواند روشن شود": "turning it on cuts League and Valorant chat and friends — these are on 5222, 5223 and 2099 and the relay only carries 80 and 443. If those ports are ever opened on the relay, this group can be turned on",
