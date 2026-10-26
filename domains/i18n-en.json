@@ -1226,6 +1226,8 @@
 "روشن کردنش چت و دوستان لیگ و والورانت را قطع می‌کند — این‌ها روی ۵۲۲۲ و ۵۲۲۳ و ۲۰۹۹ هستند و رله فقط ۸۰ و ۴۴۳ را می‌برد. اگر روزی این پورت‌ها روی رله باز شوند، این گروه می‌تواند روشن شود": "turning it on cuts League and Valorant chat and friends — these are on 5222, 5223 and 2099 and the relay only carries 80 and 443. If those ports are ever opened on the relay, this group can be turned on",
 "روشن کردنش چیزی را می‌شکند": "turning it on breaks something",
 "روشن کردنش کالاف و وارزون را از سرور جدا می‌کند — این‌ها روی ۴۴۳ نیستند": "turning it on cuts CoD and Warzone off from their servers — these are not on 443",
+"Rockstar — ورود و سرویس‌های بازی": "Rockstar — sign-in and game services",
+"روشن کردنش ورود GTA Online و Red Dead Online را خراب می‌کند — راک‌استار ورود از آی‌پی خروجی را رد می‌کند": "turning it on breaks GTA Online and Red Dead Online sign-in — Rockstar refuses a sign-in from the exit's address",
 "روشن: کسی که پلنش تمام شده، آی‌پی‌اش ثبت نیست یا عوض شده، هر سایتی باز کند پنل مشتری برایش باز می‌شود. خاموش: اینترنتش از راه رله فقط کار نمی‌کند و صفحه‌ای خودش باز نمی‌شود؛ اگر خودش آدرس پنل مشتری را باز کند، هنوز وارد می‌شود. برای همهٔ سرورها، تا یک دقیقه دیگر.": "On: someone whose plan ended, whose IP is not registered or has changed, gets the customer panel whatever site they open. Off: their internet simply does not work through the relay and no page opens by itself; if they open the customer panel's address themselves, they still get in. For every server, within a minute.",
 "روی": "on",
 "روی UDP — در آزمایش ما وصل نشد": "Over UDP — did not connect in our test",

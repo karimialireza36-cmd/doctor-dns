@@ -3119,6 +3119,20 @@ exit 0
 ##    for the list, pc/djp01/dus01/deu01 for the PUP; psdevwiki System_Software).
 ##
 ##      update.playstation.net  <x>.ps5.update / <x>.ps4.update - system software
+##
+## 4. Rockstar's sign-in (ROS). Routed, auth-prod.ros.rockstargames.com sees the
+##    exit's address while the console plays from Iran's, and the game stops at
+##    "Unable to connect to Rockstar game services" (0x50060190) right after that
+##    one name - nothing else of Rockstar's is asked. The relay path itself is
+##    fine (a curl through it gets Rockstar's 404), and every Rockstar game host
+##    answers an Iranian address with the same codes as the exit. Resolved
+##    directly, GTA Online comes up. Measured on a PS5 on Irancell, 0.10.7, exit
+##    in Ireland, October 2026. rockstargames.com itself stays routed (site,
+##    Social Club, patches).
+##
+##      ros.rockstargames.com               auth-prod, prod, <svc>-gta5/rdr2-prod
+##      cloud.rockstargames.com             prod.cloud
+##      prod-locator-cloud.rockstargames.com
 #
 #server=/gosredirector.ea.com/#
 #server=/blazeredirector.ea.com/#
@@ -3129,6 +3143,9 @@ exit 0
 #server=/np.playstation.net/#
 #server=/np.dl.playstation.net/#
 #server=/update.playstation.net/#
+#server=/ros.rockstargames.com/#
+#server=/cloud.rockstargames.com/#
+#server=/prod-locator-cloud.rockstargames.com/#
 #server=/ol.epicgames.com/#
 #server=/ogs.live.on.epicgames.com/#
 #server=/edea.live.use1a.on.epicgames.com/#
@@ -39458,6 +39475,18 @@ exit 0
 #          ]
 #        },
 #        {
+#          "key": "rockstar",
+#          "label": "Rockstar — ورود و سرویس‌های بازی",
+#          "opt_in": true,
+#          "locked": true,
+#          "note": "روشن کردنش ورود GTA Online و Red Dead Online را خراب می‌کند — راک‌استار ورود از آی‌پی خروجی را رد می‌کند",
+#          "domains": [
+#            "ros.rockstargames.com",
+#            "cloud.rockstargames.com",
+#            "prod-locator-cloud.rockstargames.com"
+#          ]
+#        },
+#        {
 #          "key": "playstation",
 #          "label": "PlayStation — STUN و API",
 #          "opt_in": true,
@@ -42639,6 +42668,8 @@ exit 0
 #"روشن کردنش چت و دوستان لیگ و والورانت را قطع می‌کند — این‌ها روی ۵۲۲۲ و ۵۲۲۳ و ۲۰۹۹ هستند و رله فقط ۸۰ و ۴۴۳ را می‌برد. اگر روزی این پورت‌ها روی رله باز شوند، این گروه می‌تواند روشن شود": "turning it on cuts League and Valorant chat and friends — these are on 5222, 5223 and 2099 and the relay only carries 80 and 443. If those ports are ever opened on the relay, this group can be turned on",
 #"روشن کردنش چیزی را می‌شکند": "turning it on breaks something",
 #"روشن کردنش کالاف و وارزون را از سرور جدا می‌کند — این‌ها روی ۴۴۳ نیستند": "turning it on cuts CoD and Warzone off from their servers — these are not on 443",
+#"Rockstar — ورود و سرویس‌های بازی": "Rockstar — sign-in and game services",
+#"روشن کردنش ورود GTA Online و Red Dead Online را خراب می‌کند — راک‌استار ورود از آی‌پی خروجی را رد می‌کند": "turning it on breaks GTA Online and Red Dead Online sign-in — Rockstar refuses a sign-in from the exit's address",
 #"روشن: کسی که پلنش تمام شده، آی‌پی‌اش ثبت نیست یا عوض شده، هر سایتی باز کند پنل مشتری برایش باز می‌شود. خاموش: اینترنتش از راه رله فقط کار نمی‌کند و صفحه‌ای خودش باز نمی‌شود؛ اگر خودش آدرس پنل مشتری را باز کند، هنوز وارد می‌شود. برای همهٔ سرورها، تا یک دقیقه دیگر.": "On: someone whose plan ended, whose IP is not registered or has changed, gets the customer panel whatever site they open. Off: their internet simply does not work through the relay and no page opens by itself; if they open the customer panel's address themselves, they still get in. For every server, within a minute.",
 #"روی": "on",
 #"روی UDP — در آزمایش ما وصل نشد": "Over UDP — did not connect in our test",

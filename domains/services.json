@@ -1992,6 +1992,18 @@
           ]
         },
         {
+          "key": "rockstar",
+          "label": "Rockstar — ورود و سرویس‌های بازی",
+          "opt_in": true,
+          "locked": true,
+          "note": "روشن کردنش ورود GTA Online و Red Dead Online را خراب می‌کند — راک‌استار ورود از آی‌پی خروجی را رد می‌کند",
+          "domains": [
+            "ros.rockstargames.com",
+            "cloud.rockstargames.com",
+            "prod-locator-cloud.rockstargames.com"
+          ]
+        },
+        {
           "key": "playstation",
           "label": "PlayStation — STUN و API",
           "opt_in": true,
