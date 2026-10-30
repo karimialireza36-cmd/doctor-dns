@@ -391,6 +391,7 @@ def from_panel(secret, header, body):      # body: bytes، همان‌طور ک�
 | `GET /admin/users/{id}` | یک حساب |
 | `POST /admin/users/{id}/status` | `{"status": "suspended"}` یا `{"status": "active"}` |
 | `POST /admin/users/{id}/plan` | `{"plan_id": 1}` — دادن پلن بدون رسید (مثلاً پرداخت نقدی) |
+| `POST /admin/users/{id}/extend` | `{"days": 3, "note": "جبران اختلال"}` — افزودن روز به **پایان فعلی** حساب (نه «اکنون به‌اضافهٔ N» مثل کادر پنل). ۱ تا ۹۰ روز؛ حجم دست نمی‌خورد؛ پلن‌های رزرو بعد از پایان تازه شروع می‌شوند؛ خبر «نزدیک پایان» دوباره به‌موقع می‌آید. حسابی که دوره‌اش تمام شده فقط با `"revive": true` برمی‌گردد، از همین حالا به مدت N روز (بی آن `409` با `expired`). حساب مسدود مسدود می‌ماند. با `Idempotency-Key` تکرار درخواست روز را دو بار اضافه نمی‌کند. جواب: `days`، `revived`، `expires_at`، `message`، `user` |
 | `POST /admin/users/{id}/wallet` | `{"amount": "50000", "note": "هدیه"}` — اضافه کردن به کیف پول؛ `"-50000"` کم می‌کند. کمتر از صفر نمی‌شود (`409` با `wallet_short`). به مشتری خبر `wallet.changed` می‌رود |
 | `GET /admin/tickets?status=open` | تیکت‌ها؛ `open` (پیش‌فرض)، `answered`، `closed`، `all` |
 | `GET /admin/tickets/{id}` | یک تیکت با پیام‌ها و صاحبش |

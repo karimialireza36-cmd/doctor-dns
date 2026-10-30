@@ -495,7 +495,8 @@
           "key": "arcraiders",
           "label": "ARC Raiders",
           "domains": [
-            "arcraiders.com"
+            "arcraiders.com",
+            "es-pio.net"
           ]
         },
         {
@@ -640,6 +641,8 @@
           "label": "THE FINALS",
           "domains": [
             "embark.games",
+            "embark.net",
+            "es-dis.net",
             "thefinals.com"
           ]
         },

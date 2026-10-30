@@ -5632,6 +5632,9 @@ exit 0
 ## Set in users.warned once the bot has been told the term ends soon. Cleared
 ## with the other bits whenever the account is given more.
 #WARNED_EXPIRING = 4
+## The most days one call of the admin API's extend may add - a war's worth,
+## not a typo's.
+#EXTEND_MAX_DAYS = 90
 #EXPIRING_DAYS = 3
 #
 #IPV4 = re.compile(r"^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$")
@@ -11807,6 +11810,56 @@ exit 0
 #        return 200, {"ok": True, "message": done,
 #                     "user": admin_user_view(self.store, user, self.relays)}
 #
+#    def api_admin_extend(self, body, uid):
+#        """Days added to the end the account already has - an outage made up
+#        for. Unlike the admin panel's box, which sets "now plus N", the days
+#        go on top of what is left, and reserved plans keep their turn after
+#        the new end. The allowance is left as it is: this is time owed, not
+#        bytes. An account whose days ran out comes back only with "revive",
+#        and then from now - so a bot can make up the days of someone whose
+#        plan ended during the outage, and nobody is revived by mistake."""
+#        user, err = self.admin_target(uid)
+#        if err:
+#            return err
+#        try:
+#            days = int(body.get("days"))
+#        except (TypeError, ValueError):
+#            days = 0
+#        if not 1 <= days <= EXTEND_MAX_DAYS:
+#            return 400, refused("bad_days", "days باید بین ۱ و %d باشد" % EXTEND_MAX_DAYS)
+#        revive = body.get("revive") is True
+#        note = str(body.get("note") or "").strip()[:200]
+#        stamp = datetime.now(timezone.utc)
+#        with self.store.lock:
+#            row = self.store.db.execute("SELECT status, expires_at FROM users WHERE id = ?",
+#                                        (user["id"],)).fetchone()
+#            ends = parse_ts(row["expires_at"])
+#            if not ends:
+#                return 409, refused("no_end", "این حساب تاریخ پایان ندارد")
+#            ran_out = ends <= stamp or row["status"] == "expired"
+#            if ran_out and not revive:
+#                return 409, refused("expired", "دورهٔ این حساب تمام شده؛ برای برگرداندن"
+#                                               " revive بفرستید")
+#            until = (max(ends, stamp) if ran_out else ends) + timedelta(days=days)
+#            # Back to active only from "expired": a suspended account stays
+#            # suspended, and one out of allowance stays so - its bytes are
+#            # not what this gives.
+#            self.store.db.execute(
+#                "UPDATE users SET expires_at = ?, warned = warned & ?,"
+#                " status = CASE WHEN status = 'expired' THEN 'active' ELSE status END"
+#                " WHERE id = ?",
+#                (until.isoformat(timespec="seconds"), ~WARNED_EXPIRING, user["id"]))
+#            self.store.db.commit()
+#        self.admin_log("user #%d +%d days%s%s" % (user["id"], days,
+#                                                  " (revived)" if ran_out else "",
+#                                                  ": " + note if note else ""))
+#        user = self.store.one("SELECT * FROM users WHERE id = ?", (user["id"],))
+#        return 200, {"ok": True, "days": days, "revived": ran_out,
+#                     "expires_at": user["expires_at"],
+#                     "message": "%d روز اضافه شد؛ پایان تازه: %s"
+#                                % (days, show_date(until, calendar_of(self.store.db))),
+#                     "user": admin_user_view(self.store, user, self.relays)}
+#
 #    def api_admin_wallet(self, body, uid):
 #        """Put money into a wallet or take it out - by hand, with a reason."""
 #        user, err = self.admin_target(uid)
@@ -11962,6 +12015,7 @@ exit 0
 #        ("GET", re.compile(r"/api/v1/admin/users/(\d{1,12})$"), "admin_user"),
 #        ("POST", re.compile(r"/api/v1/admin/users/(\d{1,12})/status$"), "admin_status"),
 #        ("POST", re.compile(r"/api/v1/admin/users/(\d{1,12})/plan$"), "admin_plan"),
+#        ("POST", re.compile(r"/api/v1/admin/users/(\d{1,12})/extend$"), "admin_extend"),
 #        ("POST", re.compile(r"/api/v1/admin/users/(\d{1,12})/wallet$"), "admin_wallet"),
 #        ("GET", re.compile(r"/api/v1/admin/tickets$"), "admin_tickets"),
 #        ("GET", re.compile(r"/api/v1/admin/tickets/(\d{1,12})$"), "admin_ticket"),
@@ -37978,7 +38032,8 @@ exit 0
 #          "key": "arcraiders",
 #          "label": "ARC Raiders",
 #          "domains": [
-#            "arcraiders.com"
+#            "arcraiders.com",
+#            "es-pio.net"
 #          ]
 #        },
 #        {
@@ -38123,6 +38178,8 @@ exit 0
 #          "label": "THE FINALS",
 #          "domains": [
 #            "embark.games",
+#            "embark.net",
+#            "es-dis.net",
 #            "thefinals.com"
 #          ]
 #        },
@@ -43833,7 +43890,11 @@ exit 0
 #"🟢 آنلاین الان (": "🟢 Online now (",
 #"🤖 لینک ربات:": "🤖 Bot link:",
 #"🧾 رسید #": "🧾 Receipt #",
-#"🧾 پرداخت با رسید": "🧾 Pay with a receipt"
+#"🧾 پرداخت با رسید": "🧾 Pay with a receipt",
+#"days باید بین ۱ و": "days must be between 1 and",
+#"این حساب تاریخ پایان ندارد": "This account has no end date",
+#"دورهٔ این حساب تمام شده؛ برای برگرداندن revive بفرستید": "This account's term has ended; send revive to bring it back",
+#"روز اضافه شد؛ پایان تازه:": "days added; new end:"
 #}
 #__END_I18N_EN__
 
