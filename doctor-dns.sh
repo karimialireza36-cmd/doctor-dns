@@ -5635,6 +5635,9 @@ exit 0
 ## The most days one call of the admin API's extend may add - a war's worth,
 ## not a typo's.
 #EXTEND_MAX_DAYS = 90
+## The most gigabytes one call of the admin API's quota may add - a big pack,
+## not a slip of the finger.
+#QUOTA_ADD_MAX_GB = 1000
 #EXPIRING_DAYS = 3
 #
 #IPV4 = re.compile(r"^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$")
@@ -11860,6 +11863,52 @@ exit 0
 #                                % (days, show_date(until, calendar_of(self.store.db))),
 #                     "user": admin_user_view(self.store, user, self.relays)}
 #
+#    def api_admin_quota(self, body, uid):
+#        """Gigabytes added to the allowance the account already has - an extra
+#        pack the customer bought, not a new plan. The days, the plan and the
+#        bytes already used stay as they are. An account that had run out of
+#        allowance is back to active as soon as it has some left; a suspended
+#        one stays suspended. The quota warnings are cleared, as the admin
+#        panel's row does when the allowance is raised, so the customer is told
+#        again when the new allowance runs low. An unlimited account has nothing
+#        to add to, and one whose days ran out needs days first."""
+#        user, err = self.admin_target(uid)
+#        if err:
+#            return err
+#        try:
+#            gb = int(body.get("gb"))
+#        except (TypeError, ValueError):
+#            gb = 0
+#        if not 1 <= gb <= QUOTA_ADD_MAX_GB:
+#            return 400, refused("bad_gb", "gb باید بین ۱ و %d باشد" % QUOTA_ADD_MAX_GB)
+#        note = str(body.get("note") or "").strip()[:200]
+#        stamp = datetime.now(timezone.utc)
+#        with self.store.lock:
+#            row = self.store.db.execute("SELECT status, expires_at, quota_bytes, used_bytes"
+#                                        " FROM users WHERE id = ?", (user["id"],)).fetchone()
+#            if not row["quota_bytes"]:
+#                return 409, refused("unlimited", "حجم این حساب نامحدود است")
+#            ends = parse_ts(row["expires_at"])
+#            if row["status"] == "expired" or (ends and ends <= stamp):
+#                return 409, refused("expired", "دورهٔ این حساب تمام شده؛ اول روز بدهید")
+#            quota = row["quota_bytes"] + gb * GB
+#            used = row["used_bytes"] or 0
+#            back = row["status"] == "over_quota" and used < quota
+#            self.store.db.execute(
+#                "UPDATE users SET quota_bytes = ?, warned = warned & ?,"
+#                " status = CASE WHEN status = 'over_quota' AND ? THEN 'active' ELSE status END"
+#                " WHERE id = ?",
+#                (quota, WARNED_EXPIRING, 1 if back else 0, user["id"]))
+#            self.store.db.commit()
+#        self.admin_log("user #%d +%d GB%s%s" % (user["id"], gb, " (back to active)" if back
+#                                                else "", ": " + note if note else ""))
+#        user = self.store.one("SELECT * FROM users WHERE id = ?", (user["id"],))
+#        return 200, {"ok": True, "gb": gb, "reactivated": back,
+#                     "quota_bytes": user["quota_bytes"], "used_bytes": user["used_bytes"] or 0,
+#                     "message": "%d گیگ به حجم اضافه شد؛ حجم تازه: %s"
+#                                % (gb, human_fa(user["quota_bytes"])),
+#                     "user": admin_user_view(self.store, user, self.relays)}
+#
 #    def api_admin_wallet(self, body, uid):
 #        """Put money into a wallet or take it out - by hand, with a reason."""
 #        user, err = self.admin_target(uid)
@@ -12016,6 +12065,7 @@ exit 0
 #        ("POST", re.compile(r"/api/v1/admin/users/(\d{1,12})/status$"), "admin_status"),
 #        ("POST", re.compile(r"/api/v1/admin/users/(\d{1,12})/plan$"), "admin_plan"),
 #        ("POST", re.compile(r"/api/v1/admin/users/(\d{1,12})/extend$"), "admin_extend"),
+#        ("POST", re.compile(r"/api/v1/admin/users/(\d{1,12})/quota$"), "admin_quota"),
 #        ("POST", re.compile(r"/api/v1/admin/users/(\d{1,12})/wallet$"), "admin_wallet"),
 #        ("GET", re.compile(r"/api/v1/admin/tickets$"), "admin_tickets"),
 #        ("GET", re.compile(r"/api/v1/admin/tickets/(\d{1,12})$"), "admin_ticket"),
@@ -43894,7 +43944,11 @@ exit 0
 #"days باید بین ۱ و": "days must be between 1 and",
 #"این حساب تاریخ پایان ندارد": "This account has no end date",
 #"دورهٔ این حساب تمام شده؛ برای برگرداندن revive بفرستید": "This account's term has ended; send revive to bring it back",
-#"روز اضافه شد؛ پایان تازه:": "days added; new end:"
+#"روز اضافه شد؛ پایان تازه:": "days added; new end:",
+#"gb باید بین ۱ و": "gb must be between 1 and",
+#"حجم این حساب نامحدود است": "This account's allowance is unlimited",
+#"دورهٔ این حساب تمام شده؛ اول روز بدهید": "This account's term has ended; give it days first",
+#"گیگ به حجم اضافه شد؛ حجم تازه:": "GB added to the allowance; new allowance:"
 #}
 #__END_I18N_EN__
 
