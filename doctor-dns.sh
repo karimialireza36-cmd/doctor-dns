@@ -4338,6 +4338,12 @@ exit 0
 #
 #add rule inet smartdns gate ip saddr != @allowed udp dport 53 drop
 #add rule inet smartdns gate ip saddr != @allowed tcp dport { 53, 80, 443, 853, 1119, 4070 } drop
+#
+## The templates' resolvers (5300-5999) listen on the public address too, and a
+## query sent straight to one of them never touches port 53, so without this
+## line anyone could use them and the allowlist would mean nothing. A customer
+## redirected there from 53 is in @allowed and is not affected. (issue #26)
+#add rule inet smartdns gate ip saddr != @allowed meta l4proto { tcp, udp } th dport 5300-5999 drop
 #RULES
 #        nft flush chain $TABLE gate
 #        nft -f "$ENFORCE" || { rm -f "$ENFORCE"; die "nft refused the rules; nothing changed"; }
