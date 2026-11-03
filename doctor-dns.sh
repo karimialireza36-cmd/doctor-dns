@@ -3074,8 +3074,19 @@ exit 0
 ##    needs the exit (it does not complete TLS from Iran at all); the rest of
 ##    prod.dl and the playstation.com API stay routed with it.
 ##
-##      np.playstation.net      ps5.np - STUN + PSN API
+##      np.playstation.net      ps5.np - PSN API
 ##      np.dl.playstation.net   envelope2, uef, gs-sec.ww
+##
+##    The PS5's STUN server is not ps5.np but <region>.np.stun.playstation.net
+##    (us.np.stun... seen from Tehran, November 2026), which is not under
+##    np.playstation.net and so was routed with playstation.net. Its Binding
+##    Requests carry XOR-ONLY (0x0021, an old rfc3489bis attribute) plus
+##    USERNAME and MESSAGE-INTEGRITY keyed by Sony; coturn on the relay answers
+##    every one with 420 Unknown Attribute, and the console's connection test
+##    shows "NAT type: Failed". Only Sony's own server can answer them. Resolved
+##    directly, the same console reported NAT Type 2 at once.
+##
+##      stun.playstation.net    <region>.np.stun - the console's STUN
 ##
 ##    The same reasoning was tried for Epic's backend and reverted - see below -
 ##    so verify per-name rather than assuming the rule generalises.
@@ -3142,6 +3153,7 @@ exit 0
 #server=/demonware.net/#
 #server=/np.playstation.net/#
 #server=/np.dl.playstation.net/#
+#server=/stun.playstation.net/#
 #server=/update.playstation.net/#
 #server=/ros.rockstargames.com/#
 #server=/cloud.rockstargames.com/#
@@ -39606,7 +39618,8 @@ exit 0
 #          "note": "روشن کردنش تشخیص NAT کنسول را خراب می‌کند",
 #          "domains": [
 #            "np.playstation.net",
-#            "np.dl.playstation.net"
+#            "np.dl.playstation.net",
+#            "stun.playstation.net"
 #          ]
 #        },
 #        {
