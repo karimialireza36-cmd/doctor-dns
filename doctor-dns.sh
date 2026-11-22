@@ -197,6 +197,36 @@ local_sites_include() {
     chmod 644 "$LOCAL_SITES_MAP"
 }
 
+# The names port 443 carries to the exit (lab branch, see relay-nginx.conf):
+# seeded here, so nginx -t passes and 443 goes on working from the first
+# second - the service list, and every name the resolvers already answer
+# with this relay. smartdns-sync rewrites it from the resolvers' files on
+# every sync after that, so an upgrade leaves a list that has names be.
+SNI_ALLOW_MAP=/etc/nginx/smartdns-sni-allow.map
+sni_allow_include() {
+    [ -s "$SNI_ALLOW_MAP" ] && return 0
+    {
+        payload DOMAINS
+        grep -rhs --include='*.conf' --exclude=gate.conf '^address=/' \
+            /etc/dnsmasq.d /etc/smartdns-profiles \
+            | awk -F/ -v ip="$RELAY_IP" '$NF == ip { for (i = 2; i < NF; i++) print $i }'
+    } | tr 'A-Z' 'a-z' | sed 's/\.$//' \
+      | grep -E '^[a-z0-9_-]+(\.[a-z0-9_-]+)*$' | sort -u \
+      | awk '{ n[$0] = 1 }
+             END { for (d in n) { k = d; covered = 0
+                       while ((i = index(k, ".")) > 0) { k = substr(k, i + 1)
+                           if (k in n) { covered = 1; break } }
+                       if (!covered) print "." d " 1;" } }' \
+      | sort > "$SNI_ALLOW_MAP.tmp"
+    {
+        printf '# The names nginx carries on 443 to the exit. Seeded by the installer;\n'
+        printf '# smartdns-sync rewrites it from the DNS rules - change them in the panel.\n'
+        cat "$SNI_ALLOW_MAP.tmp"
+    } > "$SNI_ALLOW_MAP"
+    rm -f "$SNI_ALLOW_MAP.tmp"
+    chmod 644 "$SNI_ALLOW_MAP"
+}
+
 # What nginx's DoH blocks include: the certificate, and the names that reach
 # the DoH server. Written here with the machine's own name; once the admin
 # panel has given DoH a name of its own and smartdns-sync has a certificate
@@ -1929,6 +1959,7 @@ if is_exit && [ -f /etc/smart-dns/upstream ]; then
 fi
 if [ "$ROLE" = exit ] || [ "$ROLE" = node ]; then relay_allows; fi
 if [ "$ROLE" = relay ]; then
+    sni_allow_include
     install_payload RELAY_NGINX /etc/nginx/nginx.conf && NGINX_CHANGED=1 || true
 else
     install_payload EXIT_NGINX /etc/nginx/nginx.conf && NGINX_CHANGED=1 || true
@@ -3575,6 +3606,12 @@ exit 0
 #}
 #
 #stream {
+#    # The routed names (lab branch, karimialireza36-cmd/doctor-dns): before
+#    # the first map, because a map takes its hash sizes from whatever is set
+#    # when nginx reads it. The list below holds about a thousand names, past
+#    # the default 2048-slot table once wildcards are counted.
+#    map_hash_max_size 16384;
+#    map_hash_bucket_size 128;
 #    # One line per connection, for the customer's "used by service" chart:
 #    # who, which port, which name they asked for, and how much went each way.
 #    # smartdns-sync reads it every half minute, adds it up by service and
@@ -3602,13 +3639,34 @@ exit 0
 #        default to_exit;
 #    }
 #
+#    # Which names port 443 carries to the exit (lab branch,
+#    # karimialireza36-cmd/doctor-dns). Only the names this relay's DNS
+#    # answers with this relay - the service list, the operator's own domains
+#    # and every template's ticks - so a customer who points some other name
+#    # here by hand, in a hosts file, an app or a router, gets nothing: the
+#    # relay is not a way to the open internet for anyone, let in or not.
+#    # smartdns-sync writes the list from the resolvers' own files every sync,
+#    # so a domain added, changed or taken off in the panel is followed here
+#    # within half a minute; the installer seeds it. ".name" is the name and
+#    # every name under it. A name not on the list, or no name at all, goes to
+#    # the discard port and is closed at once, as the gate's door does.
+#    map $ssl_preread_server_name $sni_routed {
+#        hostnames;
+#        include /etc/nginx/smartdns-sni-allow.map;
+#        default 0;
+#    }
+#    map $sni_routed $sni_target {
+#        1       ${to_exit}_https;
+#        default 127.0.0.1:9;
+#    }
+#
 #    # doh begin
 #    # Port 443 carries two things: everything a customer opens, which goes on
 #    # to the exit untouched, and DNS over HTTPS to this relay's own name, which
 #    # does not. nginx reads the name the client asked for - it decrypts nothing
 #    # to do it - and sends the relay's own name to the DoH server further down.
-#    # Every other name goes exactly where it always went, and a client that
-#    # sends no name at all goes to the exit, as before.
+#    # Every other name goes by $sni_target above: to the exit if it is a
+#    # routed name, and nowhere if it is not.
 #    map $ssl_preread_server_name $https_target {
 #        # The DoH names this machine answers - its own, and any the admin
 #        # panel set - kept by the installer and smartdns-sync.
@@ -3623,7 +3681,7 @@ exit 0
 #        # creates the file empty and never writes it again; empty, nothing
 #        # changes where anything goes.
 #        include /etc/nginx/smartdns-local-sites.map;
-#        default       ${to_exit}_https;
+#        default       $sni_target;
 #    }
 #    server {
 #        listen 443;
@@ -3679,11 +3737,12 @@ exit 0
 #    # nodoh begin
 #    server {
 #        listen 443;
-#        # Only to read the name for the usage chart; nothing is decrypted.
+#        # To read the name - for the usage chart, and for $sni_target, which
+#        # lets only the routed names through; nothing is decrypted.
 #        ssl_preread on;
 #        proxy_connect_timeout 10s;
 #        proxy_timeout 10m;
-#        proxy_pass ${to_exit}_https;
+#        proxy_pass $sni_target;
 #    }
 #    # nodoh end
 #
@@ -13899,6 +13958,113 @@ exit 0
 #KNOWN_NAMES = {}
 #
 #
+## ------------------------------------------------- the names 443 carries
+## (lab branch, karimialireza36-cmd/doctor-dns.) nginx on a relay sends port
+## 443 to the exit only for the names in this file - see relay-nginx.conf - so
+## the relay is no proxy to the open internet for a customer who points some
+## other name at it by hand. The list is read from the resolvers' own files,
+## not kept beside them: whatever this relay's DNS answers with this relay -
+## the service list, the operator's domains, each template's ticks - is what
+## 443 carries, and a domain added, changed or taken off in the panel is
+## followed on the next sync with nothing to keep in step by hand.
+#SNI_ALLOW_MAP = "/etc/nginx/smartdns-sni-allow.map"
+## Fewer than this, and something went wrong reading the files rather than the
+## operator emptying the service: the list in place is kept, since an empty
+## one would close 443 to every customer at once.
+#SNI_ALLOW_MIN = 20
+#SNI_ADDRESS = re.compile(r"^address=/(.+)/([0-9.]+)$")
+#SNI_NAME = re.compile(r"^[a-z0-9_-]+(\.[a-z0-9_-]+)*$")
+#
+#
+#def routed_names(dirs, me, skip=()):
+#    """Every name an address= rule in these directories answers with `me`.
+#
+#    The gate's resolver is skipped: it answers names for addresses not let
+#    in, and its "#" would be every name there is. Block rules ("address=/x/")
+#    and rules for any other address are not this relay's and are left out.
+#    """
+#    names = set()
+#    for d in dirs:
+#        try:
+#            files = sorted(os.listdir(d))
+#        except OSError:
+#            continue
+#        for f in files:
+#            path = os.path.join(d, f)
+#            if not f.endswith(".conf") or path in skip:
+#                continue
+#            for line in (read_text(path) or "").splitlines():
+#                m = SNI_ADDRESS.match(line.strip())
+#                if not m or m.group(2) != me:
+#                    continue
+#                for n in m.group(1).split("/"):
+#                    n = n.strip().lower().rstrip(".")
+#                    if n and n != "#" and SNI_NAME.match(n):
+#                        names.add(n)
+#    return names
+#
+#
+#def outermost(names):
+#    """The names without those a parent on the list already covers.
+#
+#    ".example.com" in nginx is example.com and every name under it, so
+#    ".a.example.com" beside it says nothing more - and a name twice in one
+#    map is a "conflicting parameter" nginx refuses to start with.
+#    """
+#    keep = set()
+#    for n in names:
+#        parts = n.split(".")
+#        if not any(".".join(parts[i:]) in names for i in range(1, len(parts))):
+#            keep.add(n)
+#    return keep
+#
+#
+#def sni_allow_text(names):
+#    return ("# The names nginx carries on 443 to the exit. Written by smartdns-sync\n"
+#            "# from this relay's DNS rules every sync - change them in the panel.\n"
+#            + "".join(".%s 1;\n" % n for n in sorted(names)))
+#
+#
+#def apply_sni_allow():
+#    """Bring the routed-names list in step with the resolvers' rules, and
+#    nginx with it: checked by nginx first, put back as it was if refused,
+#    and reloaded only when the list changed. Does nothing on a machine whose
+#    nginx does not read the list - an exit, a node, or a relay that has not
+#    been upgraded to it yet."""
+#    if SNI_ALLOW_MAP not in (read_text(NGINX_CONF) or ""):
+#        return False
+#    me = (CFG or {}).get("SELF_IP") or ""
+#    if not me:
+#        return False
+#    names = outermost(routed_names((DNSMASQ_D, PROFILE_DIR), me, skip=(GATE_CONF,)))
+#    if len(names) < SNI_ALLOW_MIN:
+#        log(ERROR, "routed names for 443: only %d found - the list in place is kept"
+#            % len(names))
+#        return False
+#    text = sni_allow_text(names)
+#    old = read_text(SNI_ALLOW_MAP)
+#    if text == old:
+#        return False
+#    tmp = SNI_ALLOW_MAP + ".tmp"
+#    with open(tmp, "w", encoding="utf-8") as fh:
+#        fh.write(text)
+#    os.chmod(tmp, 0o644)
+#    os.replace(tmp, SNI_ALLOW_MAP)
+#    if sh("nginx", "-t").returncode != 0:
+#        if old is None:
+#            os.unlink(SNI_ALLOW_MAP)
+#        else:
+#            with open(SNI_ALLOW_MAP, "w", encoding="utf-8") as fh:
+#                fh.write(old)
+#        log(ERROR, "routed names for 443 refused by nginx - the list in place is kept")
+#        return False
+#    sh("systemctl", "reload", "nginx")
+#    before = set(re.findall(r"^\.(\S+) 1;$", old or "", re.M))
+#    log(INFO, "routed names for 443: %d %s" % (len(names), " ".join(
+#        signed(sorted(names - before), "+") + signed(sorted(before - names), "-"))))
+#    return True
+#
+#
 #def apply_profiles(profiles, assignment, restart=False, names=None):
 #    """Give each template its own resolver, and point each address at one.
 #
@@ -16572,6 +16738,10 @@ exit 0
 #        ports = {}
 #        assignment = {}
 #        log_exception("profiles failed: %s" % e)
+#    try:
+#        apply_sni_allow()
+#    except Exception as e:
+#        log_exception("routed names for 443 not written: %s" % e)
 #    try:
 #        write_doh_state(answer.get("doh"), ports or {}, assignment, want)
 #    except Exception as e:

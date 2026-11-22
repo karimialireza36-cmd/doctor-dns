@@ -197,6 +197,36 @@ local_sites_include() {
     chmod 644 "$LOCAL_SITES_MAP"
 }
 
+# The names port 443 carries to the exit (lab branch, see relay-nginx.conf):
+# seeded here, so nginx -t passes and 443 goes on working from the first
+# second - the service list, and every name the resolvers already answer
+# with this relay. smartdns-sync rewrites it from the resolvers' files on
+# every sync after that, so an upgrade leaves a list that has names be.
+SNI_ALLOW_MAP=/etc/nginx/smartdns-sni-allow.map
+sni_allow_include() {
+    [ -s "$SNI_ALLOW_MAP" ] && return 0
+    {
+        payload DOMAINS
+        grep -rhs --include='*.conf' --exclude=gate.conf '^address=/' \
+            /etc/dnsmasq.d /etc/smartdns-profiles \
+            | awk -F/ -v ip="$RELAY_IP" '$NF == ip { for (i = 2; i < NF; i++) print $i }'
+    } | tr 'A-Z' 'a-z' | sed 's/\.$//' \
+      | grep -E '^[a-z0-9_-]+(\.[a-z0-9_-]+)*$' | sort -u \
+      | awk '{ n[$0] = 1 }
+             END { for (d in n) { k = d; covered = 0
+                       while ((i = index(k, ".")) > 0) { k = substr(k, i + 1)
+                           if (k in n) { covered = 1; break } }
+                       if (!covered) print "." d " 1;" } }' \
+      | sort > "$SNI_ALLOW_MAP.tmp"
+    {
+        printf '# The names nginx carries on 443 to the exit. Seeded by the installer;\n'
+        printf '# smartdns-sync rewrites it from the DNS rules - change them in the panel.\n'
+        cat "$SNI_ALLOW_MAP.tmp"
+    } > "$SNI_ALLOW_MAP"
+    rm -f "$SNI_ALLOW_MAP.tmp"
+    chmod 644 "$SNI_ALLOW_MAP"
+}
+
 # What nginx's DoH blocks include: the certificate, and the names that reach
 # the DoH server. Written here with the machine's own name; once the admin
 # panel has given DoH a name of its own and smartdns-sync has a certificate
@@ -1929,6 +1959,7 @@ if is_exit && [ -f /etc/smart-dns/upstream ]; then
 fi
 if [ "$ROLE" = exit ] || [ "$ROLE" = node ]; then relay_allows; fi
 if [ "$ROLE" = relay ]; then
+    sni_allow_include
     install_payload RELAY_NGINX /etc/nginx/nginx.conf && NGINX_CHANGED=1 || true
 else
     install_payload EXIT_NGINX /etc/nginx/nginx.conf && NGINX_CHANGED=1 || true

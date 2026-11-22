@@ -250,7 +250,7 @@ def render(tunnel, doh=False):
 
 on, off = render(True), render(False)
 check("with a tunnel, every port goes through it",
-      "proxy_pass ${to_exit}_https;" in on and "proxy_pass ${to_exit}_http;" in on
+      "1       ${to_exit}_https;" in on and "proxy_pass $sni_target;" in on and "proxy_pass ${to_exit}_http;" in on
       and "proxy_pass ${to_exit}_spotify;" in on and "proxy_pass ${to_exit}_blizzard;" in on, on[-600:])
 check("  with the exit itself as the fallback",
       "server 203.0.113.2:443 backup;" in on and "server 203.0.113.2:80 backup;" in on)
@@ -258,7 +258,7 @@ check("  and the tunnel's end first", on.index("127.0.0.1:18443") < on.index("20
 check("without one, straight to the exit as before",
       "server 203.0.113.2:443;" in off and "server 203.0.113.2:80;" in off
       and "server 203.0.113.2:4070;" in off and "server 203.0.113.2:1119;" in off
-      and "proxy_pass ${to_exit}_https;" in off)
+      and "1       ${to_exit}_https;" in off and "proxy_pass $sni_target;" in off)
 check("  and no trace of the tunnel", "backup;" not in off and "18443" not in off)
 print("the relay's nginx with DNS over HTTPS")
 don, doff = render(True, doh=True), render(False, doh=True)
@@ -267,9 +267,9 @@ check("443 reads the name and nothing more",
 check("  the DoH names go to the DoH server - the file the installer and smartdns-sync keep",
       "include /etc/nginx/smartdns-doh-names.map;" in don)
 check("  every other name goes where it always went, through the tunnel",
-      "default       ${to_exit}_https;" in don)
+      "default       $sni_target;" in don and "1       ${to_exit}_https;" in don)
 check("  or straight to the exit without one",
-      "default       ${to_exit}_https;" in doff and "server 203.0.113.2:443;" in doff
+      "default       $sni_target;" in doff and "1       ${to_exit}_https;" in doff and "server 203.0.113.2:443;" in doff
       and "backup;" not in doff)
 check("  and the plain 443 block is gone, so 443 is not listened on twice",
       don.count("listen 443;") == 1 and doff.count("listen 443;") == 1)

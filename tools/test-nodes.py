@@ -251,8 +251,11 @@ check("  the relay sends those addresses through it, and no others",
 conf = read("templates/relay-nginx.conf")
 check("  by the customer's address, this relay's own exit for everybody else",
       "map $remote_addr $to_exit {\n        include /etc/nginx/smartdns-customer-exits.map;\n"
-      "        default to_exit;" in conf and "proxy_pass ${to_exit}_https;" in conf
-      and "default       ${to_exit}_https;" in conf)
+      "        default to_exit;" in conf
+      # 443 goes by $sni_target since the routed-names list (lab branch):
+      # still this customer's exit, but only for a routed name.
+      and "1       ${to_exit}_https;" in conf and "proxy_pass $sni_target;" in conf
+      and "default       $sni_target;" in conf)
 check("  the installer leaves the list empty, never naming upstreams it did not write",
       'CUSTOMER_EXITS=/etc/nginx/smartdns-customer-exits.map' in logic
       and '> "$CUSTOMER_EXITS"' in logic)
