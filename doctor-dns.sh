@@ -14025,18 +14025,25 @@ exit 0
 #            + "".join(".%s 1;\n" % n for n in sorted(names)))
 #
 #
-#def apply_sni_allow():
+#def apply_sni_allow(main_in_use=True):
 #    """Bring the routed-names list in step with the resolvers' rules, and
 #    nginx with it: checked by nginx first, put back as it was if refused,
 #    and reloaded only when the list changed. Does nothing on a machine whose
 #    nginx does not read the list - an exit, a node, or a relay that has not
-#    been upgraded to it yet."""
+#    been upgraded to it yet.
+#
+#    The main resolver's own rules - the default template's list, the
+#    operator's domains, epic's pins - count only while someone is answered by
+#    it. Once every address is on a template, what is routed is the templates'
+#    files and the shared files they read (BASE_DIR), and a name the default
+#    template still lists but nobody is given must not stay open on 443."""
 #    if SNI_ALLOW_MAP not in (read_text(NGINX_CONF) or ""):
 #        return False
 #    me = (CFG or {}).get("SELF_IP") or ""
 #    if not me:
 #        return False
-#    names = outermost(routed_names((DNSMASQ_D, PROFILE_DIR), me, skip=(GATE_CONF,)))
+#    dirs = (DNSMASQ_D, PROFILE_DIR) if main_in_use else (BASE_DIR, PROFILE_DIR)
+#    names = outermost(routed_names(dirs, me, skip=(GATE_CONF,)))
 #    if len(names) < SNI_ALLOW_MIN:
 #        log(ERROR, "routed names for 443: only %d found - the list in place is kept"
 #            % len(names))
@@ -16739,7 +16746,12 @@ exit 0
 #        assignment = {}
 #        log_exception("profiles failed: %s" % e)
 #    try:
-#        apply_sni_allow()
+#        # Anyone admitted whose template has no resolver of its own - none
+#        # given, one that routes everything, or past the ports - is answered
+#        # by the main resolver. When the profiles failed, assume so: an open
+#        # name is a lesser harm than a customer's game cut off.
+#        apply_sni_allow(not ports or
+#                        any(assignment.get(ip) not in ports for ip in want))
 #    except Exception as e:
 #        log_exception("routed names for 443 not written: %s" % e)
 #    try:

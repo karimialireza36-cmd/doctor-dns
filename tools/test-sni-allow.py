@@ -175,8 +175,34 @@ sync.CFG = {}
 check("  as is a relay that does not know its own address", not sync.apply_sni_allow())
 sync.CFG = {"SELF_IP": ME}
 
+print("the default template, once nobody is on it")
+base = os.path.join(tmp, "base")
+os.makedirs(base)
+write(os.path.join(dnsmasq_d, "70-shared.conf"), "address=/shared.example/%s\n" % ME)
+os.symlink(os.path.join(dnsmasq_d, "70-shared.conf"), os.path.join(base, "70-shared.conf"))
+sync.BASE_DIR = base
+write(os.path.join(profiles, "3.conf"), "port=5303\n" + "".join(
+    "address=/%s/%s\n" % (d, ME) for d in SERVICE
+    if d not in ("netflix.com", "spotify.com", "openai.com", "chatgpt.com", "github.com",
+                 "docker.com"))
+    + "".join("address=/game%d.example/%s\n" % (i, ME) for i in range(10)))
+check("someone on the main resolver: its list stays open",
+      (sync.apply_sni_allow(True) or True) and "netflix.com" in listed())
+check("nobody on it: its names close on 443", sync.apply_sni_allow(False)
+      and not {"netflix.com", "spotify.com", "openai.com", "github.com"} & set(listed()), listed())
+check("  the templates' ticks and the shared files they read stay",
+      {"playstation.com", "ea.com", "tick.example", "shared.example"} <= set(listed()), listed())
+check("  the operator's own domains go with the main resolver",
+      "new-game.example" not in listed())
+check("someone back on it: the list opens again",
+      sync.apply_sni_allow(True) and "netflix.com" in listed())
+check("sync_once asks whether anyone is on the main resolver",
+      "apply_sni_allow(not ports or" in read("templates/smartdns-sync")
+      and "any(assignment.get(ip) not in ports for ip in want)" in read("templates/smartdns-sync"))
+os.remove(os.path.join(profiles, "3.conf"))
+
 sync_text = read("templates/smartdns-sync")
-check("sync_once runs it every sync", "        apply_sni_allow()\n" in sync_text)
+check("sync_once runs it every sync", "        apply_sni_allow(" in sync_text)
 
 print("nginx")
 conf = read("templates/relay-nginx.conf")
