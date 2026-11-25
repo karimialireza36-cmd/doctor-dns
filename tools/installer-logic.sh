@@ -403,11 +403,13 @@ enable_service() {
 # v1.8.5 left the pool hollow until a restart. Upstream published only the
 # source for v1.9.0, so the two archives are built unchanged from tag v1.9.0
 # (commit dfd29d56546ff0bf877fce97a91a0cda757ba6f2), in upstream's own layout,
-# reproducibly, and published as a release of this fork with that exact source
-# beside them. When upstream publishes binaries, BACKPACK_URL goes back to
+# reproducibly, and kept with that exact source, LICENSE and NOTICE on this
+# fork's branch backpack-dist. The address names the commit, so the files
+# behind it cannot change; the hashes below are checked all the same. When
+# upstream publishes binaries, BACKPACK_URL goes back to
 # "https://github.com/AminMGMT/BackPack/releases/download/$BACKPACK_VERSION".
 BACKPACK_VERSION="v1.9.0"
-BACKPACK_URL="https://github.com/karimialireza36-cmd/doctor-dns/releases/download/backpack-$BACKPACK_VERSION"
+BACKPACK_URL="https://raw.githubusercontent.com/karimialireza36-cmd/doctor-dns/d1466b5ab17aeaed08a991144f12b1628b2f16de"
 BACKPACK_SHA_amd64="17d6dc185df5b37976d87cf2c9fea2f202871a0b27aa2a7cb336fef1efbba618"
 BACKPACK_SHA_arm64="8ceda2644052827b72102af7a9f9a62660b304aea9f40f5a35d04bc89a3ef24c"
 BACKPACK_BIN=/usr/local/lib/smart-dns/backpack

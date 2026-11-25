@@ -387,7 +387,7 @@ in front of the tunnel.
   the installer. It is not part of this project (it is AGPL-3.0). A server with
   no internet: `BACKPACK_TARBALL=/path/to/the.tar.gz`.
   *This fork:* v1.9.0, whose upstream release has only source, comes from this
-  fork's `backpack-v1.9.0` release - built unchanged from upstream tag v1.9.0
+  fork's `backpack-dist` branch, at a pinned commit - built unchanged from upstream tag v1.9.0
   (commit `dfd29d5`), with that source, `LICENSE` and `NOTICE` beside it.
   Based on BackPack by Amin Mohammadi (AminMGMT) - https://github.com/AminMGMT/BackPack
 - The listening end's port answers the other machine and nobody else.
