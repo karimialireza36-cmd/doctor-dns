@@ -398,9 +398,18 @@ enable_service() {
 # fetched from his own releases when asked for and checked against the hashes
 # pinned here - never copied into this project, and never a version nobody here
 # has tried.
-BACKPACK_VERSION="v1.8.5"
-BACKPACK_SHA_amd64="e80c4da9bdcece9e7a82305e572fdfde9a395a68a985fdd835c1af8ff248b395"
-BACKPACK_SHA_arm64="9d9eaa951f8bd3f7b786be94916517c4ec900af0eeaac893b89d03d9867643f4"
+#
+# Fork (NetPlay): v1.9.0 refills a pool slot whose dial failed (upstream #66);
+# v1.8.5 left the pool hollow until a restart. Upstream published only the
+# source for v1.9.0, so the two archives are built unchanged from tag v1.9.0
+# (commit dfd29d56546ff0bf877fce97a91a0cda757ba6f2), in upstream's own layout,
+# reproducibly, and published as a release of this fork with that exact source
+# beside them. When upstream publishes binaries, BACKPACK_URL goes back to
+# "https://github.com/AminMGMT/BackPack/releases/download/$BACKPACK_VERSION".
+BACKPACK_VERSION="v1.9.0"
+BACKPACK_URL="https://github.com/karimialireza36-cmd/doctor-dns/releases/download/backpack-$BACKPACK_VERSION"
+BACKPACK_SHA_amd64="17d6dc185df5b37976d87cf2c9fea2f202871a0b27aa2a7cb336fef1efbba618"
+BACKPACK_SHA_arm64="8ceda2644052827b72102af7a9f9a62660b304aea9f40f5a35d04bc89a3ef24c"
 BACKPACK_BIN=/usr/local/lib/smart-dns/backpack
 TUNNEL_DIR=/etc/smart-dns/tunnel
 TUNNEL_NFT=/etc/nftables.d/40-smartdns-tunnel.conf
@@ -700,13 +709,13 @@ install_backpack() {
     if [ -n "${BACKPACK_TARBALL:-}" ]; then
         cp "$BACKPACK_TARBALL" "$tmp/bp.tgz" || { warn "cannot read $BACKPACK_TARBALL"; rm -rf "$tmp"; return 1; }
     elif [ -n "${BACKPACK_QUIET:-}" ] && ! curl -fsSL --connect-timeout 15 -m 180 -o "$tmp/bp.tgz" \
-            "https://github.com/AminMGMT/BackPack/releases/download/$BACKPACK_VERSION/backpack_linux_$arch.tar.gz"; then
+            "$BACKPACK_URL/backpack_linux_$arch.tar.gz"; then
         info "BackPack could not be downloaded from GitHub - a tunnel set from the admin"
         info "panel needs it here. Later, run this again, or with BACKPACK_TARBALL=/path/to/"
         info "backpack_linux_$arch.tar.gz ($BACKPACK_VERSION) fetched elsewhere."
         rm -rf "$tmp"; return 1
     elif [ -z "${BACKPACK_QUIET:-}" ] && ! curl -fsSL -m 300 -o "$tmp/bp.tgz" \
-            "https://github.com/AminMGMT/BackPack/releases/download/$BACKPACK_VERSION/backpack_linux_$arch.tar.gz"; then
+            "$BACKPACK_URL/backpack_linux_$arch.tar.gz"; then
         warn "could not download BackPack from GitHub. Without internet, fetch"
         warn "backpack_linux_$arch.tar.gz ($BACKPACK_VERSION) elsewhere and run with"
         warn "    BACKPACK_TARBALL=/path/to/it"

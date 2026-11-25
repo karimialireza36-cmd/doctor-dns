@@ -319,8 +319,10 @@ check("it pins a version, and a hash for each architecture",
       and re.search(r'BACKPACK_SHA_amd64="[0-9a-f]{64}"', LOGIC) is not None
       and re.search(r'BACKPACK_SHA_arm64="[0-9a-f]{64}"', LOGIC) is not None)
 inst = function("install_backpack")
-check("it fetches BackPack from BackPack's own releases",
-      "github.com/AminMGMT/BackPack/releases/download/$BACKPACK_VERSION" in inst)
+check("it fetches BackPack from one pinned https release address",
+      re.search(r'BACKPACK_URL="https://github\.com/[^"$]+/releases/download/[^"]*\$BACKPACK_VERSION"', LOGIC) is not None
+      and inst.count('"$BACKPACK_URL/backpack_linux_$arch.tar.gz"') == 2
+      and "AminMGMT/BackPack/releases/download" not in inst)
 check("and checks the hash before installing anything",
       0 < inst.index("sha256sum") < inst.index("install -m 755"))
 check("a download that fails leaves the run on the direct path",

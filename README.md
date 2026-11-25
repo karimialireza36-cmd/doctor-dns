@@ -383,9 +383,13 @@ in front of the tunnel.
 - The relay's sync with the panel (port 8443) goes through the tunnel too.
   Filtering kills a large upload on the direct path - a customer's receipt
   never arrived - and it falls back to direct when the tunnel's end is not up.
-- BackPack is fetched from its own releases when you ask for it and checked
-  against a hash pinned in the installer. It is not part of this project (it is
-  AGPL-3.0). A server with no internet: `BACKPACK_TARBALL=/path/to/the.tar.gz`.
+- BackPack is fetched when you ask for it and checked against a hash pinned in
+  the installer. It is not part of this project (it is AGPL-3.0). A server with
+  no internet: `BACKPACK_TARBALL=/path/to/the.tar.gz`.
+  *This fork:* v1.9.0, whose upstream release has only source, comes from this
+  fork's `backpack-v1.9.0` release - built unchanged from upstream tag v1.9.0
+  (commit `dfd29d5`), with that source, `LICENSE` and `NOTICE` beside it.
+  Based on BackPack by Amin Mohammadi (AminMGMT) - https://github.com/AminMGMT/BackPack
 - The listening end's port answers the other machine and nobody else.
 - Back to plain TCP in one command, on either machine:
   `sudo smartdns-tunnel off`. To change the transport, the port or which end
