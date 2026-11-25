@@ -1,0 +1,9 @@
+BackPack v1.9.0, built unchanged from the upstream source (AGPL-3.0).
+upstream: https://github.com/AminMGMT/BackPack
+tag:      v1.9.0
+commit:   dfd29d56546ff0bf877fce97a91a0cda757ba6f2
+go:       go version go1.26.9 linux/amd64
+flags:    CGO_ENABLED=0 GOOS=linux GOARCH={amd64,arm64} -trimpath -buildvcs=false -ldflags '-s -w'
+binary sha256 amd64: a76b5d507e163d9213ac2feb25248f2a2418fb22ff92f37fda6f6e4881a10c8f
+binary sha256 arm64: feebb6bba4dae09b14c060c6603c2ca147c46243b4509ad45b448203d966a3c7
+upstream has no published binary for this tag; source tarball here is the exact source built.
