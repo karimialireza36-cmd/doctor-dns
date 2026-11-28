@@ -156,9 +156,33 @@ panel.record_verdicts(store, {
     "198.51.100.1": {"gs2.playstation.net": {"ok": [5, 5]}}}, catalogue)
 rows = {(r["service"], r["verdict"]): (r["conns"], r["bytes"])
         for r in store.q("SELECT * FROM usage_verdict")}
-check("verdicts are kept per customer, per service, per day",
-      rows == {("psn", "ok"): (2, 1100), ("psn", "exit_failed"): (1, 300),
+check("verdicts are kept per customer, per catalogue group, per day",
+      rows == {("psn/main", "ok"): (2, 1100), ("psn/main", "exit_failed"): (1, 300),
                ("_other", "sni_denied"): (1, 517)}, rows)
+
+print("games by group")
+games_cat = [
+    {"key": "playstation", "label": "PlayStation", "groups": [
+        {"key": "online", "label": "فروشگاه، اکانت و بازی آنلاین", "domains": ["playstation.net"]},
+        {"key": "download", "label": "دانلود بازی", "domains": ["dl.playstation.net"]}]},
+    {"key": "shooters", "label": "Shooters & battle royale", "groups": [
+        {"key": "arc", "label": "ARC Raiders", "domains": ["arcraiders.com"]},
+        {"key": "rivals", "label": "Marvel Rivals", "domains": ["marvelrivals.com"]}]},
+    {"key": "nintendo", "label": "Nintendo", "groups": [
+        {"key": "main", "label": "همه", "domains": ["nintendo.net"]}]}]
+index = panel.group_index(games_cat)
+check("the longest name of ours picks the group",
+      panel.service_of("gs.dl.playstation.net", index) == "playstation/download"
+      and panel.service_of("np.playstation.net", index) == "playstation/online"
+      and panel.service_of("api.arcraiders.com", index) == "shooters/arc"
+      and panel.service_of("x.example", index) == "_other"
+      and panel.service_of(":80", index) == "_http")
+labels = panel.service_labels(games_cat)
+check("a game's group stands alone, a console's says whose, an only group is the service",
+      labels["shooters/arc"] == "ARC Raiders" and labels["shooters/rivals"] == "Marvel Rivals"
+      and labels["playstation/download"] == "PlayStation، دانلود بازی"
+      and labels["nintendo/main"] == "Nintendo" and labels["playstation"] == "PlayStation"
+      and labels["_other"] == "سایر", labels)
 kept = json.dumps([dict(r) for r in store.q("SELECT * FROM usage_verdict")])
 check("no host name is kept", "playstation.net" not in kept and "example.org" not in kept)
 
@@ -241,7 +265,7 @@ check("a customer's activity: online now, setup, seven days, games",
       code == 200 and got["online"] is True and got["setup"]["ips"] == 1
       and got["setup"]["game_ok_at"] and len(got["days"]) == 7
       and got["days"][1]["minutes"] == 15
-      and [(g["key"], g["ok"], g["exit_failed"]) for g in got["games"]][0] == ("psn", 2, 1)
+      and [(g["key"], g["ok"], g["exit_failed"]) for g in got["games"]][0] == ("psn/main", 2, 1)
       and got["games"][0]["label"] == "پلی‌استیشن", got)
 code, got = call("/api/v1/admin/online", "boss")
 check("who is online now, with today's and yesterday's peaks",
@@ -253,7 +277,7 @@ check("a day across customers: longest online first, peak",
       and got["peak"]["peak"] == 2, got)
 code, got = call("/api/v1/admin/activity?day=" + today, "boss")
 check("  and its games carried, refused and failed",
-      code == 200 and got["games_ok"][0]["key"] == "psn"
+      code == 200 and got["games_ok"][0]["key"] == "psn/main"
       and got["games_denied"][0]["key"] == "_other"
       and got["games_failed"][0]["conns"] == 1, got)
 check("a day that is not a day is refused",

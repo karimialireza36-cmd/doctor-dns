@@ -8842,13 +8842,26 @@ exit 0
 ## Lab branch, karimialireza36-cmd/doctor-dns. What the operator's bot shows
 ## of each customer: online now, their days, and how their games went. Only
 ## through a key with admin rights; the names a relay saw never get here,
-## only the catalogue service they belong to.
+## only the catalogue group they belong to - most groups are one game.
+#def group_index(catalogue):
+#    """Every catalogue name, mapped to "service/group": finer than the
+#    service, which lumps twenty shooters, or a console's store and its
+#    downloads, under one name."""
+#    out = {}
+#    for svc in catalogue:
+#        for grp in svc.get("groups") or ():
+#            for d in grp.get("domains") or ():
+#                out[d] = "%s/%s" % (svc["key"], grp.get("key") or "main")
+#    return out
+#
+#
 #def record_verdicts(store, rows, catalogue):
 #    """How a relay's customers' connections ended, since the last sync:
-#    {ip: {name: {verdict: [connections, bytes]}}}."""
+#    {ip: {name: {verdict: [connections, bytes]}}}. Kept by catalogue group;
+#    rows from before groups carry the bare service key and still read."""
 #    if not isinstance(rows, dict) or not rows:
 #        return
-#    index = service_index(catalogue)
+#    index = group_index(catalogue)
 #    day, at = usage_buckets()["1d"], now()
 #    for ip, names in list(rows.items())[:5000]:
 #        if not isinstance(names, dict):
@@ -8926,7 +8939,24 @@ exit 0
 #
 #
 #def service_labels(catalogue):
-#    label = {svc["key"]: svc.get("label") or svc["key"] for svc in catalogue}
+#    """Names for both service keys and "service/group" keys. A group named
+#    for a game (Latin letters: "ARC Raiders", "Call of Duty — Demonware")
+#    stands alone; a service's only group, or its "all", is the service; any
+#    other group says whose it is: "PlayStation، دانلود بازی"."""
+#    label = {}
+#    for svc in catalogue:
+#        name = svc.get("label") or svc["key"]
+#        label[svc["key"]] = name
+#        groups = svc.get("groups") or ()
+#        for grp in groups:
+#            g = grp.get("label") or grp.get("key") or ""
+#            if len(groups) == 1 or not g or g == "همه":
+#                text = name
+#            elif re.search(r"[A-Za-z]", g):
+#                text = g
+#            else:
+#                text = "%s، %s" % (name, g)
+#            label["%s/%s" % (svc["key"], grp.get("key") or "main")] = text
 #    label.update({"_http": "دانلود کنسول و HTTP", "_dns": "DNS رمزگذاری‌شده",
 #                  "_other": "سایر"})
 #    return label
