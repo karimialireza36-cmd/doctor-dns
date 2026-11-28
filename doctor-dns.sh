@@ -3632,7 +3632,11 @@ exit 0
 #    # daily logrotate would have kept a copy for two weeks.
 #    # Last, where it went: which exit carried it, for the usage per server -
 #    # "a:443, b:443" when the first refused and nginx went on to the next.
-#    log_format usage '$remote_addr $server_port $ssl_preread_server_name $bytes_sent $bytes_received $upstream_addr';
+#    # And how it ended (lab branch, karimialireza36-cmd/doctor-dns): 200
+#    # carried, 502 or 503 the exit could not be reached - for the admin's
+#    # count of each customer's games that worked, were refused or failed.
+#    # At the end, so a line from before still reads the same.
+#    log_format usage '$remote_addr $server_port $ssl_preread_server_name $bytes_sent $bytes_received $upstream_addr $status';
 #    access_log /run/smartdns-usage usage buffer=32k flush=10s;
 #
 #    # The way to the exit: the upstreams to_exit_https, _http, _spotify and
@@ -15170,6 +15174,18 @@ exit 0
 #USAGE_PENDING = {}
 ## The same bytes by which exit carried them: {ip: {exit: [up, down]}}.
 #EXIT_PENDING = {}
+## How each connection ended, by the name it asked for (lab branch,
+## karimialireza36-cmd/doctor-dns): {ip: {name: {verdict: [connections, bytes]}}}.
+## "ok" carried; "sni_denied" a name port 443 does not carry, sent to the
+## closed port; "exit_failed" no exit could be reached. The panel turns the
+## names into services, as with USAGE_PENDING; the names go no further.
+#VERDICT_PENDING = {}
+## The names kept per address before the rest go under one: a machine using
+## the relay as a proxy asks for names without end.
+#VERDICT_NAMES_MAX = 300
+## Where nginx sends a name it does not carry: see $sni_target.
+#DENIED_UPSTREAM = "127.0.0.1:9"
+#EXIT_FAILED_STATUS = ("502", "503")
 #
 #
 #def exit_of(upstream):
@@ -15204,6 +15220,36 @@ exit 0
 #        pair[1] += down
 #
 #
+#def split_status(parts):
+#    """A usage line's fields and how it ended: nginx's $status, which a line
+#    from before the field was added does not have (None then)."""
+#    last = parts[-1] if parts else ""
+#    if len(parts) >= 7 and len(last) == 3 and last.isdigit():
+#        return parts[:-1], last
+#    return parts, None
+#
+#
+#def verdict_of(upstream, status):
+#    """How a connection ended: ok, sni_denied, exit_failed - or None where
+#    the line does not say (from before $status, or a status that is neither)."""
+#    if status is None:
+#        return None
+#    if DENIED_UPSTREAM in [u.strip().rstrip(",") for u in upstream.split()]:
+#        return "sni_denied"
+#    if status in EXIT_FAILED_STATUS:
+#        return "exit_failed"
+#    return "ok" if status == "200" else None
+#
+#
+#def count_verdict(ip, name, verdict, n):
+#    per = VERDICT_PENDING.setdefault(ip, {})
+#    if name not in per and len(per) >= VERDICT_NAMES_MAX:
+#        name = "_other"
+#    pair = per.setdefault(name, {}).setdefault(verdict, [0, 0])
+#    pair[0] += 1
+#    pair[1] += n
+#
+#
 #def take_usage():
 #    """What customers' connections asked for since last time: {ip: {name: bytes}}.
 #
@@ -15216,9 +15262,11 @@ exit 0
 #        try:
 #            with open(USAGE_TAKEN, encoding="utf-8", errors="replace") as fh:
 #                for line in fh:
-#                    parts = line.split()
+#                    parts, status = split_status(line.split())
+#                    upstream = ""
 #                    if len(parts) >= 6:
 #                        ip, port, name, sent, got = parts[:5]
+#                        upstream = " ".join(parts[5:])
 #                        count_exit(ip, parts[-1], sent, got)
 #                    elif len(parts) == 5:
 #                        ip, port, name, sent, got = parts
@@ -15235,6 +15283,9 @@ exit 0
 #                        continue
 #                    per = USAGE_PENDING.setdefault(ip, {})
 #                    per[name] = per.get(name, 0) + n
+#                    verdict = verdict_of(upstream, status)
+#                    if verdict:
+#                        count_verdict(ip, name, verdict, n)
 #        finally:
 #            try:
 #                os.remove(USAGE_TAKEN)
@@ -16564,6 +16615,10 @@ exit 0
 #        log(WARN, "usage not read: %s" % e)
 #    if services:
 #        payload["services"] = services
+#    if VERDICT_PENDING:
+#        payload["verdicts"] = {ip: {name: {v: list(pair) for v, pair in per.items()}
+#                                    for name, per in names.items()}
+#                               for ip, names in VERDICT_PENDING.items()}
 #    if EXIT_PENDING:
 #        payload["exit_usage"] = {ip: {to: list(pair) for to, pair in v.items()}
 #                                 for ip, v in EXIT_PENDING.items()}
@@ -16643,6 +16698,8 @@ exit 0
 #        USAGE_PENDING.clear()
 #    if "exit_usage" in payload:
 #        EXIT_PENDING.clear()
+#    if "verdicts" in payload:
+#        VERDICT_PENDING.clear()
 #    if "doh_stats" in payload:
 #        DOH_PENDING["doh"].clear()
 #        DOH_PENDING["dot"].clear()
