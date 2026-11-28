@@ -2399,5 +2399,6 @@
 "gb باید بین ۱ و": "gb must be between 1 and",
 "حجم این حساب نامحدود است": "This account's allowance is unlimited",
 "دورهٔ این حساب تمام شده؛ اول روز بدهید": "This account's term has ended; give it days first",
-"گیگ به حجم اضافه شد؛ حجم تازه:": "GB added to the allowance; new allowance:"
+"گیگ به حجم اضافه شد؛ حجم تازه:": "GB added to the allowance; new allowance:",
+"day باید به شکل YYYY-MM-DD (روز تهران) باشد": "day must be YYYY-MM-DD (a Tehran day)"
 }

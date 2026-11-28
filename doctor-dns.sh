@@ -5259,6 +5259,46 @@ exit 0
 #    PRIMARY KEY (user_id, day, service)
 #);
 #
+#-- Online stats (lab branch, karimialireza36-cmd/doctor-dns), for the
+#-- operator's key only. How each customer's connections to a service ended,
+#-- per day: ok carried, sni_denied a name port 443 does not carry,
+#-- exit_failed no exit reached. By service, as usage_service: the names a
+#-- relay saw go no further. Kept thirty days (VERDICT_KEEP_DAYS).
+#CREATE TABLE IF NOT EXISTS usage_verdict (
+#    user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+#    day     TEXT NOT NULL,
+#    service TEXT NOT NULL,
+#    verdict TEXT NOT NULL,
+#    conns   INTEGER NOT NULL DEFAULT 0,
+#    bytes   INTEGER NOT NULL DEFAULT 0,
+#    last_at TEXT,
+#    PRIMARY KEY (user_id, day, service, verdict)
+#);
+#-- Each five minutes in which a customer was online, by the same test as
+#-- users.last_seen. Kept as long as the five-minute usage (USAGE_KEEP).
+#CREATE TABLE IF NOT EXISTS online_5m (
+#    user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+#    bucket  TEXT NOT NULL,
+#    PRIMARY KEY (user_id, bucket)
+#);
+#CREATE INDEX IF NOT EXISTS online_5m_bucket ON online_5m(bucket);
+#-- Built from online_5m before it goes: each customer's Tehran day online,
+#-- and each day's most customers online at once. Kept ninety days.
+#CREATE TABLE IF NOT EXISTS online_daily (
+#    user_id  INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+#    day      TEXT NOT NULL,
+#    minutes  INTEGER NOT NULL DEFAULT 0,
+#    sessions INTEGER NOT NULL DEFAULT 0,
+#    first_at TEXT,
+#    last_at  TEXT,
+#    PRIMARY KEY (user_id, day)
+#);
+#CREATE TABLE IF NOT EXISTS online_peak (
+#    day   TEXT PRIMARY KEY,
+#    peak  INTEGER NOT NULL DEFAULT 0,
+#    at    TEXT
+#);
+#
 #-- Domains the operator added themselves, on top of the list that ships with
 #-- the installer. Kept here rather than edited on each relay so that one entry
 #-- reaches every relay, and survives a relay being rebuilt from scratch.
@@ -6780,6 +6820,8 @@ exit 0
 #                if delta >= ONLINE_MIN_BYTES:
 #                    self.db.execute("UPDATE users SET last_seen = ?, last_server = ?"
 #                                    " WHERE id = ?", (now(), relay, row["user_id"]))
+#                    self.db.execute("INSERT OR IGNORE INTO online_5m (user_id, bucket)"
+#                                    " VALUES (?, ?)", (row["user_id"], usage_buckets()["5m"]))
 #                # Upload and download apart, for the charts. The relay sends
 #                # both beside the total; one that does not is an older relay,
 #                # and its growth goes down as download rather than nowhere.
@@ -8380,6 +8422,13 @@ exit 0
 ## How long each grain is kept, in days.
 #USAGE_KEEP = {"5m": 2, "1h": 7, "1d": 90}
 #SERVICE_KEEP_DAYS = 30
+## Online stats (lab branch): verdicts by service, and the days built from
+## online_5m. A gap of this long or more between two online stretches makes
+## the second a new session.
+#VERDICT_KEEP_DAYS = 30
+#ONLINE_DAILY_KEEP_DAYS = 90
+#SESSION_GAP_MIN = 10
+#VERDICTS = ("ok", "sni_denied", "exit_failed")
 #
 #
 #def usage_buckets(when=None):
@@ -8699,6 +8748,16 @@ exit 0
 #        store.run("DELETE FROM server_usage WHERE grain = ? AND bucket < ?", (grain, cutoff))
 #    cutoff = usage_buckets(now_t - timedelta(days=SERVICE_KEEP_DAYS))["1d"]
 #    store.run("DELETE FROM usage_service WHERE day < ?", (cutoff,))
+#    # Today and yesterday from the five minutes first, while all of both
+#    # are still there; then what is past keeping.
+#    build_online(store, now_t)
+#    store.run("DELETE FROM online_5m WHERE bucket < ?",
+#              (usage_buckets(now_t - timedelta(days=USAGE_KEEP["5m"]))["5m"],))
+#    cutoff = usage_buckets(now_t - timedelta(days=VERDICT_KEEP_DAYS))["1d"]
+#    store.run("DELETE FROM usage_verdict WHERE day < ?", (cutoff,))
+#    cutoff = usage_buckets(now_t - timedelta(days=ONLINE_DAILY_KEEP_DAYS))["1d"]
+#    store.run("DELETE FROM online_daily WHERE day < ?", (cutoff,))
+#    store.run("DELETE FROM online_peak WHERE day < ?", (cutoff,))
 #    cutoff = usage_buckets(now_t - timedelta(days=90))["1d"]
 #    store.run("DELETE FROM doh_daily WHERE day < ?", (cutoff,))
 #    store.run("DELETE FROM user_server_usage WHERE day < ?", (cutoff,))
@@ -8777,6 +8836,193 @@ exit 0
 #                             " WHERE user_id = ? AND day >= ? GROUP BY service"
 #                             " ORDER BY b DESC", (uid, cutoff))]
 #    return out
+#
+#
+## ------------------------------------------------------------ online stats
+## Lab branch, karimialireza36-cmd/doctor-dns. What the operator's bot shows
+## of each customer: online now, their days, and how their games went. Only
+## through a key with admin rights; the names a relay saw never get here,
+## only the catalogue service they belong to.
+#def record_verdicts(store, rows, catalogue):
+#    """How a relay's customers' connections ended, since the last sync:
+#    {ip: {name: {verdict: [connections, bytes]}}}."""
+#    if not isinstance(rows, dict) or not rows:
+#        return
+#    index = service_index(catalogue)
+#    day, at = usage_buckets()["1d"], now()
+#    for ip, names in list(rows.items())[:5000]:
+#        if not isinstance(names, dict):
+#            continue
+#        owner = store.one("SELECT user_id FROM ips WHERE ip = ?", (ip,))
+#        if not owner:
+#            continue
+#        per = {}
+#        for name, verdicts in list(names.items())[:1000]:
+#            if not isinstance(verdicts, dict):
+#                continue
+#            key = service_of(str(name), index)
+#            for v, pair in verdicts.items():
+#                if v not in VERDICTS:
+#                    continue
+#                try:
+#                    n, b = int(pair[0]), int(pair[1])
+#                except (TypeError, ValueError, IndexError):
+#                    continue
+#                if n > 0 and b >= 0:
+#                    got = per.setdefault((key, v), [0, 0])
+#                    got[0] += n
+#                    got[1] += b
+#        for (key, v), (n, b) in per.items():
+#            store.run("INSERT INTO usage_verdict (user_id, day, service, verdict, conns,"
+#                      " bytes, last_at) VALUES (?, ?, ?, ?, ?, ?, ?)"
+#                      " ON CONFLICT(user_id, day, service, verdict) DO UPDATE SET"
+#                      " conns = conns + excluded.conns, bytes = bytes + excluded.bytes,"
+#                      " last_at = excluded.last_at",
+#                      (owner["user_id"], day, key, v, n, b, at))
+#
+#
+#def online_stretches(buckets):
+#    """A day's online five-minute buckets ("YYYY-MM-DDTHH:MM", sorted) as
+#    (minutes, sessions, first, last): a session ends where SESSION_GAP_MIN
+#    or more pass with nothing."""
+#    if not buckets:
+#        return 0, 0, None, None
+#    times = [datetime.strptime(b, "%Y-%m-%dT%H:%M") for b in buckets]
+#    sessions = 1
+#    for a, b in zip(times, times[1:]):
+#        if (b - a).total_seconds() / 60 - 5 >= SESSION_GAP_MIN:
+#            sessions += 1
+#    return (5 * len(times), sessions, times[0].strftime("%H:%M"),
+#            (times[-1] + timedelta(minutes=5)).strftime("%H:%M"))
+#
+#
+#def build_online(store, now_t=None):
+#    """online_daily and online_peak for today and yesterday, Tehran time,
+#    from online_5m - written over each time, so running it again changes
+#    nothing. Earlier days are left as they were: their five minutes are
+#    already partly gone."""
+#    now_t = now_t or datetime.now(timezone.utc)
+#    for day in (usage_buckets(now_t - timedelta(days=1))["1d"], usage_buckets(now_t)["1d"]):
+#        lo, hi = day + "T00:00", day + "T23:59"
+#        rows = store.q("SELECT user_id, bucket FROM online_5m WHERE bucket BETWEEN ? AND ?"
+#                       " ORDER BY user_id, bucket", (lo, hi))
+#        per, count = {}, {}
+#        for r in rows:
+#            per.setdefault(r["user_id"], []).append(r["bucket"])
+#            count[r["bucket"]] = count.get(r["bucket"], 0) + 1
+#        for uid, buckets in per.items():
+#            minutes, sessions, first, last = online_stretches(buckets)
+#            store.run("INSERT INTO online_daily (user_id, day, minutes, sessions, first_at,"
+#                      " last_at) VALUES (?, ?, ?, ?, ?, ?) ON CONFLICT(user_id, day)"
+#                      " DO UPDATE SET minutes = excluded.minutes, sessions ="
+#                      " excluded.sessions, first_at = excluded.first_at,"
+#                      " last_at = excluded.last_at",
+#                      (uid, day, minutes, sessions, first, last))
+#        if count:
+#            at, peak = max(sorted(count.items()), key=lambda kv: kv[1])
+#            store.run("INSERT INTO online_peak (day, peak, at) VALUES (?, ?, ?)"
+#                      " ON CONFLICT(day) DO UPDATE SET peak = excluded.peak, at = excluded.at",
+#                      (day, peak, at[11:]))
+#
+#
+#def service_labels(catalogue):
+#    label = {svc["key"]: svc.get("label") or svc["key"] for svc in catalogue}
+#    label.update({"_http": "دانلود کنسول و HTTP", "_dns": "DNS رمزگذاری‌شده",
+#                  "_other": "سایر"})
+#    return label
+#
+#
+#def online_peaks(store, now_t):
+#    out = {}
+#    for name, ago in (("today", 0), ("yesterday", 1)):
+#        day = usage_buckets(now_t - timedelta(days=ago))["1d"]
+#        row = store.one("SELECT peak, at FROM online_peak WHERE day = ?", (day,))
+#        out[name] = {"day": day, "peak": row["peak"] if row else 0,
+#                     "at": row["at"] if row else None}
+#    return out
+#
+#
+#def activity_view(store, user, catalogue, now_t=None):
+#    """One customer's activity for the operator: online now, how far setup
+#    got, the last seven days, and each game's verdicts over those days."""
+#    now_t = now_t or datetime.now(timezone.utc)
+#    uid = user["id"]
+#    build_online(store, now_t)
+#    since7 = usage_buckets(now_t - timedelta(days=6))["1d"]
+#    ips = store.q("SELECT ip, dns_seen_at FROM ips WHERE user_id = ? ORDER BY id", (uid,))
+#    dns = [r["dns_seen_at"] for r in ips if r["dns_seen_at"]]
+#    ok = store.one("SELECT MAX(last_at) at FROM usage_verdict WHERE user_id = ?"
+#                   " AND verdict = 'ok'", (uid,))
+#    days = {r["day"]: r for r in store.q(
+#        "SELECT * FROM online_daily WHERE user_id = ? AND day >= ?", (uid, since7))}
+#    used = {r["bucket"]: r["up"] + r["down"] for r in store.q(
+#        "SELECT bucket, up, down FROM usage WHERE user_id = ? AND grain = '1d'"
+#        " AND bucket >= ?", (uid, since7))}
+#    week = []
+#    for ago in range(7):
+#        day = usage_buckets(now_t - timedelta(days=ago))["1d"]
+#        d = days.get(day)
+#        week.append({"day": day, "minutes": d["minutes"] if d else 0,
+#                     "sessions": d["sessions"] if d else 0,
+#                     "first": d["first_at"] if d else None,
+#                     "last": d["last_at"] if d else None, "bytes": used.get(day, 0)})
+#    label = service_labels(catalogue)
+#    games = {}
+#    for r in store.q("SELECT service, verdict, SUM(conns) n, SUM(bytes) b, MAX(last_at) at"
+#                     " FROM usage_verdict WHERE user_id = ? AND day >= ?"
+#                     " GROUP BY service, verdict", (uid, since7)):
+#        g = games.setdefault(r["service"], dict(
+#            {"key": r["service"], "label": label.get(r["service"], r["service"]),
+#             "bytes": 0, "last_at": None}, **{v: 0 for v in VERDICTS}))
+#        g[r["verdict"]] = r["n"]
+#        g["bytes"] += r["b"] or 0
+#        g["last_at"] = max(filter(None, (g["last_at"], r["at"])), default=None)
+#    return {
+#        "online": bool(user["last_seen"] and user["last_seen"] >= online_since(now_t)),
+#        "last_seen": user["last_seen"], "server": user["last_server"],
+#        "setup": {"ips": len(ips), "dns_seen_at": max(dns) if dns else None,
+#                  "game_ok_at": ok["at"] if ok else None},
+#        "days": week,
+#        "games": sorted(games.values(), key=lambda g: (-g["ok"], -g["bytes"], g["key"])),
+#    }
+#
+#
+#def online_now(store, extra="", more=()):
+#    """The customers online now, most recently seen first."""
+#    return [{"id": r["id"], "telegram_id": r["telegram_id"], "label": who_label(r),
+#             "last_seen": r["last_seen"], "server": r["last_server"]}
+#            for r in store.q("SELECT * FROM users u WHERE last_seen >= ?" + extra
+#                             + " ORDER BY last_seen DESC LIMIT 500",
+#                             (online_since(),) + more)]
+#
+#
+#def activity_day(store, day, catalogue, extra="", more=()):
+#    """A Tehran day across customers: who was on longest, the games most
+#    carried, and the ones most refused or failed."""
+#    label = service_labels(catalogue)
+#    top = [{"id": r["id"], "telegram_id": r["telegram_id"], "label": who_label(r),
+#            "minutes": r["minutes"], "sessions": r["sessions"],
+#            "first": r["first_at"], "last": r["last_at"]}
+#           for r in store.q("SELECT u.*, o.minutes, o.sessions, o.first_at, o.last_at"
+#                            " FROM online_daily o JOIN users u ON u.id = o.user_id"
+#                            " WHERE o.day = ?" + extra + " ORDER BY o.minutes DESC,"
+#                            " u.id LIMIT 20", (day,) + more)]
+#    active = store.one("SELECT count(*) n FROM online_daily o JOIN users u"
+#                       " ON u.id = o.user_id WHERE o.day = ?" + extra, (day,) + more)["n"]
+#
+#    def by(verdict):
+#        return [{"key": r["service"], "label": label.get(r["service"], r["service"]),
+#                 "conns": r["n"], "users": r["users"], "bytes": r["b"]}
+#                for r in store.q("SELECT v.service, SUM(v.conns) n, COUNT(DISTINCT"
+#                                 " v.user_id) users, SUM(v.bytes) b FROM usage_verdict v"
+#                                 " JOIN users u ON u.id = v.user_id WHERE v.day = ?"
+#                                 " AND v.verdict = ?" + extra + " GROUP BY v.service"
+#                                 " ORDER BY n DESC LIMIT 20", (day, verdict) + more)]
+#    peak = store.one("SELECT peak, at FROM online_peak WHERE day = ?", (day,))
+#    return {"day": day, "active_users": active, "top_users": top,
+#            "peak": {"peak": peak["peak"], "at": peak["at"]} if peak else None,
+#            "games_ok": by("ok"), "games_denied": by("sni_denied"),
+#            "games_failed": by("exit_failed")}
 #
 #
 ## ----------------------------------------------------------------- DoH
@@ -10799,6 +11045,7 @@ exit 0
 #            try:
 #                record_services(self.store, body.get("services"), CATALOGUE)
 #                record_exit_usage(self.store, body.get("exit_usage"))
+#                record_verdicts(self.store, body.get("verdicts"), CATALOGUE)
 #            except Exception as e:
 #                log_exception("per-service usage not recorded: %r" % e)
 #            try:
@@ -11868,6 +12115,32 @@ exit 0
 #            return err
 #        return 200, {"ok": True, "user": admin_user_view(self.store, user, self.relays)}
 #
+#    # Online stats (lab branch, karimialireza36-cmd/doctor-dns): the
+#    # operator's, by key with admin rights only - the door above sees to it.
+#    def api_admin_activity_user(self, body, uid):
+#        user, err = self.admin_target(uid)
+#        if err:
+#            return err
+#        return 200, dict({"ok": True, "user_id": user["id"]},
+#                         **activity_view(self.store, user, CATALOGUE))
+#
+#    def api_admin_online(self, body):
+#        extra, more = self.mine()
+#        rows = online_now(self.store, extra, more)
+#        return 200, {"ok": True, "count": len(rows), "users": rows,
+#                     "peaks": online_peaks(self.store, datetime.now(timezone.utc))}
+#
+#    def api_admin_activity(self, body):
+#        day = (self.query.get("day") or [""])[0].strip()
+#        now_t = datetime.now(timezone.utc)
+#        if not day:
+#            day = usage_buckets(now_t)["1d"]
+#        if not re.match(r"^\d{4}-\d{2}-\d{2}$", day):
+#            return 400, refused("bad_day", "day باید به شکل YYYY-MM-DD (روز تهران) باشد")
+#        build_online(self.store, now_t)
+#        extra, more = self.mine()
+#        return 200, dict({"ok": True}, **activity_day(self.store, day, CATALOGUE, extra, more))
+#
 #    def api_admin_status(self, body, uid):
 #        user, err = self.admin_target(uid)
 #        if err:
@@ -12154,6 +12427,10 @@ exit 0
 #         "admin_decide"),
 #        ("GET", re.compile(r"/api/v1/admin/users$"), "admin_users"),
 #        ("GET", re.compile(r"/api/v1/admin/users/(\d{1,12})$"), "admin_user"),
+#        # Online stats (lab branch, karimialireza36-cmd/doctor-dns).
+#        ("GET", re.compile(r"/api/v1/admin/users/(\d{1,12})/activity$"), "admin_activity_user"),
+#        ("GET", re.compile(r"/api/v1/admin/online$"), "admin_online"),
+#        ("GET", re.compile(r"/api/v1/admin/activity$"), "admin_activity"),
 #        ("POST", re.compile(r"/api/v1/admin/users/(\d{1,12})/status$"), "admin_status"),
 #        ("POST", re.compile(r"/api/v1/admin/users/(\d{1,12})/plan$"), "admin_plan"),
 #        ("POST", re.compile(r"/api/v1/admin/users/(\d{1,12})/extend$"), "admin_extend"),
@@ -44217,7 +44494,8 @@ exit 0
 #"gb باید بین ۱ و": "gb must be between 1 and",
 #"حجم این حساب نامحدود است": "This account's allowance is unlimited",
 #"دورهٔ این حساب تمام شده؛ اول روز بدهید": "This account's term has ended; give it days first",
-#"گیگ به حجم اضافه شد؛ حجم تازه:": "GB added to the allowance; new allowance:"
+#"گیگ به حجم اضافه شد؛ حجم تازه:": "GB added to the allowance; new allowance:",
+#"day باید به شکل YYYY-MM-DD (روز تهران) باشد": "day must be YYYY-MM-DD (a Tehran day)"
 #}
 #__END_I18N_EN__
 

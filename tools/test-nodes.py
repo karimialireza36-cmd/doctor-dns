@@ -461,7 +461,7 @@ check("the relay adds up each customer's bytes by the exit that carried them, up
 check("  and still by name, old lines too", services["198.18.0.1"]["a.example"] == 1000
       and services["198.18.0.3"]["old.example"] == 2)
 check("  and sends them with its sync", 'payload["exit_usage"]' in read("templates/smartdns-sync")
-      and "$bytes_received $upstream_addr';" in read("templates/relay-nginx.conf"))
+      and "$bytes_received $upstream_addr $status';" in read("templates/relay-nginx.conf"))
 panel.record_exit_usage(store, {"198.18.0.1": {main: [910, 110], "93.184.216.20": [50, 50]},
                                 "10.9.9.9": {main: [5, 5]}, "198.18.0.2": {"nonsense": [7, 7]}})
 uid = store.one("SELECT user_id FROM ips WHERE ip = '198.18.0.1'")["user_id"]
