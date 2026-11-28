@@ -156,8 +156,9 @@ panel.record_verdicts(store, {
     "198.51.100.1": {"gs2.playstation.net": {"ok": [5, 5]}}}, catalogue)
 rows = {(r["service"], r["verdict"]): (r["conns"], r["bytes"])
         for r in store.q("SELECT * FROM usage_verdict")}
-check("verdicts are kept per customer, per catalogue group, per day",
-      rows == {("psn/main", "ok"): (2, 1100), ("psn/main", "exit_failed"): (1, 300),
+check("verdicts are kept per customer, per catalogue name, per day",
+      rows == {("psn/main|playstation.net", "ok"): (2, 1100),
+               ("psn/main|playstation.net", "exit_failed"): (1, 300),
                ("_other", "sni_denied"): (1, 517)}, rows)
 
 print("games by group")
@@ -184,7 +185,133 @@ check("a game's group stands alone, a console's says whose, an only group is the
       and labels["nintendo/main"] == "Nintendo" and labels["playstation"] == "PlayStation"
       and labels["_other"] == "سایر", labels)
 kept = json.dumps([dict(r) for r in store.q("SELECT * FROM usage_verdict")])
-check("no host name is kept", "playstation.net" not in kept and "example.org" not in kept)
+check("no host a customer asked for is kept, only the catalogue's own name",
+      "gs2.playstation.net" not in kept and "example.org" not in kept
+      and "x.example" not in kept)
+
+print("game names, from the live catalogue")
+gcat = [
+    {"key": "blizzard", "label": "Blizzard", "section": "games", "groups": [
+        {"key": "main", "label": "همه", "domains": ["battle.net", "callofduty.com",
+                                                     "diablo.com", "activision.com"]},
+        {"key": "cod-https", "label": "Call of Duty — دانلود",
+         "domains": ["cod.demonware.net"]},
+        {"key": "download", "label": "دانلود", "section": "downloads",
+         "domains": ["blzddist1-a.akamaihd.net"]}]},
+    {"key": "ea", "label": "EA", "groups": [
+        {"key": "main", "label": "همه", "domains": ["ea.com", "eafc.com", "apexlegends.com"]}]},
+    {"key": "shooters", "label": "Shooters", "groups": [
+        {"key": "arc", "label": "ARC Raiders", "domains": ["arcraiders.com"]}]},
+    {"key": "ai", "label": "هوش مصنوعی", "groups": [
+        {"key": "main", "label": "همه", "domains": ["openai.com"]}]}]
+ggames = [
+    {"key": "battlenet", "en": "Battle.net", "kind": "platform",
+     "needs": ["blizzard/main", "blizzard/download"]},
+    {"key": "eaapp", "en": "EA App", "kind": "platform", "needs": ["ea/main"]},
+    {"key": "cod", "en": "Call of Duty", "kind": "game",
+     "needs": ["blizzard/main", "blizzard/cod-https", "blizzard/download"]},
+    {"key": "diablo", "en": "Diablo", "kind": "game", "needs": ["blizzard/main"]},
+    {"key": "fc", "en": "EA Sports FC", "kind": "game", "needs": ["ea/main"]},
+    {"key": "apex", "en": "Apex Legends", "kind": "game", "needs": ["ea/main"]},
+    {"key": "arcraiders", "en": "ARC Raiders", "kind": "game", "needs": ["shooters/arc"]}]
+names = panel.game_names(gcat, ggames)
+lab = panel.service_labels(gcat)
+of = lambda k: panel.game_of(k, names, lab)
+check("a group one game needs and no launcher does is that game",
+      of("shooters/arc|arcraiders.com")[:2] == ("game:arcraiders", "ARC Raiders")
+      and of("blizzard/cod-https|cod.demonware.net")[:2] == ("game:cod", "Call of Duty"))
+check("in a shared group the name says the game",
+      of("blizzard/main|callofduty.com")[:2] == ("game:cod", "Call of Duty")
+      and of("blizzard/main|diablo.com")[0] == "game:diablo"
+      and of("ea/main|eafc.com")[0] == "game:fc"
+      and of("ea/main|apexlegends.com")[0] == "game:apex")
+check("  and the rest of it is the launcher's",
+      of("blizzard/main|battle.net") == ("platform:battlenet", "Battle.net، حساب و فروشگاه",
+                                         "platform")
+      and of("blizzard/main|activision.com")[0] == "platform:battlenet"
+      and of("ea/main|ea.com")[0] == "platform:eaapp")
+check("a download group keeps its own name, not the launcher's",
+      of("blizzard/download|blzddist1-a.akamaihd.net") == (
+          "blizzard/download", lab["blizzard/download"], "group"))
+check("what no game needs keeps service_labels' name",
+      of("ai/main|openai.com") == ("ai/main", "هوش مصنوعی", "group"))
+check("rows from before (group, bare service) and _other still read",
+      of("blizzard/main")[0] == "platform:battlenet" and of("ea")[1] == "EA"
+      and of("_other")[1] == "سایر")
+check("a name gone from the catalogue falls back to its group",
+      of("blizzard/main|gone.example")[0] == "platform:battlenet")
+added = gcat[:2] + [{"key": "shooters", "label": "Shooters", "groups": [
+    {"key": "arc", "label": "ARC Raiders", "domains": ["arcraiders.com"]},
+    {"key": "new", "label": "New Game", "domains": ["newgame.gg"]}]}]
+check("a game added to the catalogue and the index is named with no edit",
+      panel.game_of("shooters/new|newgame.gg", panel.game_names(added, ggames + [
+          {"key": "newgame", "en": "New Game", "kind": "game", "needs": ["shooters/new"]}]),
+          panel.service_labels(added))[:2] == ("game:newgame", "New Game"))
+check("a game taken out of the index is named by its group again",
+      panel.game_of("blizzard/main|diablo.com", panel.game_names(
+          gcat, [g for g in ggames if g["key"] != "diablo"]), lab)[0] == "platform:battlenet")
+
+print("the shipped catalogue and game index")
+real_cat = json.loads(read("domains/services.json"))["services"]
+real_games = json.loads(read("domains/games.json"))["games"]
+rn = panel.game_names(real_cat, real_games)
+rl = panel.service_labels(real_cat)
+ri = panel.domain_index(real_cat)
+rof = lambda host: panel.game_of(panel.service_of(host, ri), rn, rl)
+check("real names: Call of Duty, Apex, FC, Valorant, ARC Raiders",
+      rof("prod.callofduty.com")[1] == "Call of Duty"
+      and rof("objectstore-publishers-cod.prod.demonware.net")[1] == "Call of Duty"
+      and rof("www.apexlegends.com")[1] == "Apex Legends"
+      and rof("eafc.com")[1] == "EA Sports FC" and rof("playvalorant.com")[1] == "Valorant"
+      and rof("api.arcraiders.com")[1] == "ARC Raiders")
+check("real shared names are the launcher's, PlayStation's store not one game",
+      rof("gs2.playstation.net")[0] == "platform:psn" and rof("accounts.ea.com")[0] == "platform:eaapp"
+      and rof("ui.battle.net")[0] == "platform:battlenet"
+      and rof("gst.prod.dl.playstation.net")[0] == "playstation/download")
+named = {v[1] for k, v in rn.items() if "|" in k and v[2] == "game"}
+check("most games in the index get named", len(named) >= 100, len(named))
+wrong = [k for k, v in rn.items() if "|" in k and v[2] == "game"
+         and k.split("/")[0] in ("playstation", "steam", "nintendo", "epic")
+         and v[0] not in ("game:fortnite", "game:rocketleague", "game:fallguys")]
+check("no console or store name is pinned on one game", not wrong, wrong[:5])
+
+print("the operator's own groups")
+store.run("INSERT INTO custom_groups (id, name, created_at) VALUES (7, 'Mobile Legends', ?)",
+          (panel.now(),))
+store.run("INSERT INTO custom_domains (domain, added_at, group_id) VALUES"
+          " ('mobilelegends.com', ?, 7)", (panel.now(),))
+store.run("INSERT INTO custom_domains (domain, added_at) VALUES ('loose.example', ?)",
+          (panel.now(),))
+cat_c = catalogue + [panel.CUSTOM_SERVICE]
+panel.record_verdicts(store, {"203.0.113.5": {"api.mobilelegends.com": {"ok": [3, 30]},
+                                              "a.loose.example": {"ok": [1, 1]}}}, cat_c)
+keys = {r["service"] for r in store.q("SELECT service FROM usage_verdict")}
+live = panel.live_catalogue(store, cat_c)
+check("a group added in the panel counts and is named by its own name",
+      "cg7/main|mobilelegends.com" in keys and "custom/main|loose.example" in keys
+      and panel.game_of("cg7/main|mobilelegends.com", panel.game_names(live, []),
+                        panel.service_labels(live))[1] == "Mobile Legends", keys)
+panel.GAMES[:] = ggames
+panel.record_verdicts(store, {"203.0.113.5": {
+    "prod.callofduty.com": {"ok": [2, 200]}, "x.cod.demonware.net": {"ok": [1, 100],
+                                                                     "exit_failed": [1, 0]},
+    "ui.battle.net": {"ok": [4, 40]}}}, gcat)
+seen = {g["key"]: g for g in panel.activity_view(
+    store, store.one("SELECT * FROM users WHERE id = ?", (u["id"],)), gcat)["games"]}
+check("two names of one game add up to one row, the launcher's apart",
+      seen["game:cod"]["ok"] == 3 and seen["game:cod"]["exit_failed"] == 1
+      and seen["game:cod"]["bytes"] == 300 and seen["game:cod"]["kind"] == "game"
+      and seen["platform:battlenet"]["ok"] == 4, list(seen))
+day_games = panel.activity_day(store, panel.usage_buckets()["1d"], gcat)["games_ok"]
+check("  across customers too, counted once per customer",
+      [(g["key"], g["conns"], g["users"]) for g in day_games
+       if g["key"] in ("platform:battlenet", "game:cod")]
+      == [("platform:battlenet", 4, 1), ("game:cod", 3, 1)], day_games)
+panel.GAMES[:] = []
+store.run("DELETE FROM usage_verdict WHERE service LIKE 'blizzard%'")
+store.run("DELETE FROM usage_verdict WHERE service LIKE 'cg7%' OR service LIKE 'custom%'")
+store.run("DELETE FROM custom_domains")
+store.run("DELETE FROM custom_groups")
 
 print("online days")
 check("a day's stretches: minutes, sessions split by a ten-minute gap, first and last",

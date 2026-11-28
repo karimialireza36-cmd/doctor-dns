@@ -127,6 +127,7 @@
 "، آدرس ربات را برای دکمهٔ «اتصال به تلگرام» پنل مشتری می‌گذارد، و ربات را روشن می‌کند.": ", puts the bot’s address behind the customer panel’s “Connect Telegram” button, and turns the bot on.",
 "، آپلود": ", upload",
 "، آپلود تا": ", upload up to",
+"، حساب و فروشگاه": ", account and store",
 "، از هر رله و از همان راهی که ترافیک مشتری می‌رود. اگر از سرور خارج نشود، آن سرویس آن سرور را قبول نمی‌کند و از دست ما کاری برنمی‌آید؛ اگر از سرور خارج بشود و از مسیر مشتری نه، مشکل از راه ایران تا خارج است. فقط ۴۴۳ آزموده می‌شود؛ بازی‌هایی که روی پورت‌های دیگر یا UDP بازی می‌کنند این‌جا نیستند.": ", from each relay and along the same path customer traffic takes. If it fails from the exit server, that service does not accept that server and there is nothing we can do; if it works from the exit server but not along the customer’s path, the problem is on the way from Iran to abroad. Only 443 is tested; games that play on other ports or UDP are not here.",
 "، با کد": ", with code",
 "، بعد بقیه یکی‌یکی": ", then the rest one by one",

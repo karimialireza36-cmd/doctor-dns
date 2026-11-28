@@ -4008,13 +4008,48 @@ def group_index(catalogue):
     return out
 
 
+def domain_index(catalogue):
+    """Every catalogue name, mapped to "service/group|name": the name is the
+    catalogue's own entry, never the host a customer asked for. Kept this
+    fine because one group can hold several games - Blizzard's has Call of
+    Duty, Diablo and Overwatch - and only the name tells them apart."""
+    out = {}
+    for svc in catalogue:
+        for grp in svc.get("groups") or ():
+            for d in grp.get("domains") or ():
+                out[d] = "%s/%s|%s" % (svc["key"], grp.get("key") or "main", d)
+    return out
+
+
+def live_catalogue(store, catalogue):
+    """The catalogue with the operator's own domains filled in, as the admin
+    panel's catalogue_now does: the ones in no group under "custom", each
+    named group a service "cg<id>" of its own. They live in the database, so
+    a domain or a group added or removed there counts from the next sync."""
+    try:
+        rows = store.q("SELECT domain, group_id FROM custom_domains ORDER BY domain")
+        groups = store.q("SELECT id, name FROM custom_groups ORDER BY id")
+    except sqlite3.OperationalError:
+        return catalogue
+    loose = [r["domain"] for r in rows if r["group_id"] is None]
+    out = [dict(svc, groups=[dict(g, domains=loose) for g in svc["groups"]])
+           if svc["key"] == "custom" else svc for svc in catalogue]
+    for grp in groups:
+        out.append({"key": "cg%d" % grp["id"], "label": grp["name"], "section": "mine",
+                    "groups": [{"key": "main", "label": grp["name"],
+                                "domains": [r["domain"] for r in rows
+                                            if r["group_id"] == grp["id"]]}]})
+    return out
+
+
 def record_verdicts(store, rows, catalogue):
     """How a relay's customers' connections ended, since the last sync:
-    {ip: {name: {verdict: [connections, bytes]}}}. Kept by catalogue group;
-    rows from before groups carry the bare service key and still read."""
+    {ip: {name: {verdict: [connections, bytes]}}}. Kept by the catalogue's
+    own name, "service/group|name" (game_names reads it); rows from before
+    carry "service/group" or the bare service key and still read."""
     if not isinstance(rows, dict) or not rows:
         return
-    index = group_index(catalogue)
+    index = domain_index(live_catalogue(store, catalogue))
     day, at = usage_buckets()["1d"], now()
     for ip, names in list(rows.items())[:5000]:
         if not isinstance(names, dict):
@@ -4115,6 +4150,90 @@ def service_labels(catalogue):
     return label
 
 
+GAME_WORD_MIN = 5
+
+
+def _plain(text):
+    return re.sub(r"[^a-z0-9]", "", (text or "").lower())
+
+
+def _game_words(game, service_key):
+    """What a catalogue name may carry to say it is this game: its key, its
+    name run together, the service's key before its key ("ea" + "fc"), and
+    the first long word of its name ("rainbow" for Rainbow Six Siege)."""
+    words = {_plain(game.get("key")), _plain(game.get("en") or game.get("name")),
+             _plain(service_key) + _plain(game.get("key"))}
+    first = [w for w in re.split(r"[^a-z0-9]+", (game.get("en") or "").lower())
+             if len(w) >= GAME_WORD_MIN]
+    if first:
+        words.add(first[0])
+    return {w for w in words if len(w) >= 2}
+
+
+def _names_game(label, word):
+    return label == word or (len(word) >= 3 and label.startswith(word)) \
+        or (len(word) >= 4 and word in label)
+
+
+def game_names(catalogue, games=None):
+    """Who each kept key is, built from the live catalogue and the game
+    index on every call - nothing to edit by hand, and a game, a name or a
+    group added or taken away (by an upgrade, or the operator's own groups)
+    is named from then on. {key: (id, label, kind)}, kind "game",
+    "platform" or "group"; the id is what rows of one game add up under.
+
+    A group only one game needs, and that no launcher or console needs too,
+    is that game. In a group several share, a name that says one of them -
+    callofduty.com, apexlegends.com, eafc.com - is that game; the rest of it
+    (ea.com, battle.net) is the launcher's, named as such. Anything else
+    keeps the name service_labels gives it."""
+    games = GAMES if games is None else games
+    label = service_labels(catalogue)
+    need, owner = {}, {}
+    for game in games:
+        for ref in game.get("needs") or ():
+            if game.get("kind") == "platform":
+                owner.setdefault(ref, game)
+            else:
+                need.setdefault(ref, []).append(game)
+
+    def game_entry(game):
+        return ("game:%s" % game["key"], game.get("en") or game.get("name") or game["key"],
+                "game")
+
+    out = {}
+    for svc in catalogue:
+        for grp in svc.get("groups") or ():
+            ref = "%s/%s" % (svc["key"], grp.get("key") or "main")
+            here = need.get(ref) or []
+            plat = owner.get(ref)
+            if len(here) == 1 and not plat:
+                whole = game_entry(here[0])
+            elif here and plat and (grp.get("section") or svc.get("section")) != "downloads":
+                whole = ("platform:%s" % plat["key"], "%s، حساب و فروشگاه"
+                         % (plat.get("en") or plat.get("name")), "platform")
+            else:
+                whole = (ref, label.get(ref, ref), "group")
+            out[ref] = whole
+            for d in grp.get("domains") or ():
+                parts = [_plain(x) for x in d.lower().split(".")[:-1]]
+                hits = [g for g in here if any(
+                    _names_game(part, w) for w in _game_words(g, svc["key"]) for part in parts)]
+                out["%s|%s" % (ref, d)] = game_entry(hits[0]) if len(hits) == 1 else whole
+    return out
+
+
+def game_of(key, names, label):
+    """(id, label, kind) for a kept key - "service/group|name", "service/group"
+    or a bare service - falling back to its group, then to service_labels."""
+    if key in names:
+        return names[key]
+    ref = key.split("|", 1)[0]
+    if ref in names:
+        return names[ref]
+    return (ref, label.get(ref, ref), "group")
+
+
 def online_peaks(store, now_t):
     out = {}
     for name, ago in (("today", 0), ("yesterday", 1)):
@@ -4149,15 +4268,17 @@ def activity_view(store, user, catalogue, now_t=None):
                      "sessions": d["sessions"] if d else 0,
                      "first": d["first_at"] if d else None,
                      "last": d["last_at"] if d else None, "bytes": used.get(day, 0)})
-    label = service_labels(catalogue)
+    live = live_catalogue(store, catalogue)
+    label, names = service_labels(live), game_names(live)
     games = {}
     for r in store.q("SELECT service, verdict, SUM(conns) n, SUM(bytes) b, MAX(last_at) at"
                      " FROM usage_verdict WHERE user_id = ? AND day >= ?"
                      " GROUP BY service, verdict", (uid, since7)):
-        g = games.setdefault(r["service"], dict(
-            {"key": r["service"], "label": label.get(r["service"], r["service"]),
-             "bytes": 0, "last_at": None}, **{v: 0 for v in VERDICTS}))
-        g[r["verdict"]] = r["n"]
+        gid, text, kind = game_of(r["service"], names, label)
+        g = games.setdefault(gid, dict(
+            {"key": gid, "label": text, "kind": kind, "bytes": 0, "last_at": None},
+            **{v: 0 for v in VERDICTS}))
+        g[r["verdict"]] += r["n"]
         g["bytes"] += r["b"] or 0
         g["last_at"] = max(filter(None, (g["last_at"], r["at"])), default=None)
     return {
@@ -4182,7 +4303,8 @@ def online_now(store, extra="", more=()):
 def activity_day(store, day, catalogue, extra="", more=()):
     """A Tehran day across customers: who was on longest, the games most
     carried, and the ones most refused or failed."""
-    label = service_labels(catalogue)
+    live = live_catalogue(store, catalogue)
+    label, names = service_labels(live), game_names(live)
     top = [{"id": r["id"], "telegram_id": r["telegram_id"], "label": who_label(r),
             "minutes": r["minutes"], "sessions": r["sessions"],
             "first": r["first_at"], "last": r["last_at"]}
@@ -4194,13 +4316,19 @@ def activity_day(store, day, catalogue, extra="", more=()):
                        " ON u.id = o.user_id WHERE o.day = ?" + extra, (day,) + more)["n"]
 
     def by(verdict):
-        return [{"key": r["service"], "label": label.get(r["service"], r["service"]),
-                 "conns": r["n"], "users": r["users"], "bytes": r["b"]}
-                for r in store.q("SELECT v.service, SUM(v.conns) n, COUNT(DISTINCT"
-                                 " v.user_id) users, SUM(v.bytes) b FROM usage_verdict v"
-                                 " JOIN users u ON u.id = v.user_id WHERE v.day = ?"
-                                 " AND v.verdict = ?" + extra + " GROUP BY v.service"
-                                 " ORDER BY n DESC LIMIT 20", (day, verdict) + more)]
+        out = {}
+        for r in store.q("SELECT v.service, v.user_id, SUM(v.conns) n, SUM(v.bytes) b"
+                         " FROM usage_verdict v JOIN users u ON u.id = v.user_id"
+                         " WHERE v.day = ? AND v.verdict = ?" + extra +
+                         " GROUP BY v.service, v.user_id", (day, verdict) + more):
+            gid, text, kind = game_of(r["service"], names, label)
+            g = out.setdefault(gid, {"key": gid, "label": text, "kind": kind,
+                                     "conns": 0, "users": set(), "bytes": 0})
+            g["conns"] += r["n"] or 0
+            g["bytes"] += r["b"] or 0
+            g["users"].add(r["user_id"])
+        rows = sorted(out.values(), key=lambda g: (-g["conns"], g["key"]))[:20]
+        return [dict(g, users=len(g["users"])) for g in rows]
     peak = store.one("SELECT peak, at FROM online_peak WHERE day = ?", (day,))
     return {"day": day, "active_users": active, "top_users": top,
             "peak": {"peak": peak["peak"], "at": peak["at"]} if peak else None,
